@@ -1,6 +1,6 @@
-NAME          = dataflow
-DEPEND        = common
-TEST_DEPEND   = common
+NAME          = flow
+DEPEND        = arithmetic common
+TEST_DEPEND   = arithmetic common
 
 COVERAGE ?= 0
 
