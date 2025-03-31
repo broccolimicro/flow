@@ -1,6 +1,6 @@
 NAME          = flow
-DEPEND        = arithmetic common
-TEST_DEPEND   = arithmetic common
+DEPEND        = interpret_arithmetic interpret_ucs arithmetic ucs parse_expression parse_ucs parse common
+TEST_DEPEND   = interpret_arithmetic interpret_ucs arithmetic ucs parse_expression parse_ucs parse common
 
 COVERAGE ?= 0
 

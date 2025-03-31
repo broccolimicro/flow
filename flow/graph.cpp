@@ -1,17 +1,17 @@
 #include "graph.h"
 
+#include <parse_expression/expression.h>
+#include <interpret_arithmetic/export.h>
+#include <ucs/variable.h>
+
+#include <stdexcept>
+
 namespace flow {
 
-Operator::Operator() {
+Arc::Arc() {
 }
 
-Operator::~Operator() {
-}
-
-Value::Value() {
-}
-
-Value::~Value() {
+Arc::~Arc() {
 }
 
 Graph::Graph() {
