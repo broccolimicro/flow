@@ -1,12 +1,6 @@
-#include "func.h"
+#include "module.h"
 
-#include <parse_expression/expression.h>
-#include <interpret_arithmetic/export.h>
-#include <ucs/variable.h>
-
-#include <stdexcept>
-
-namespace flow {
+namespace clocked {
 
 Type::Type() {
 	type = FIXED;
@@ -24,7 +18,7 @@ Type::~Type() {
 }
 
 Net::Net() {
-	purpose = NONE;
+	this->purpose = WIRE;
 }
 
 Net::Net(string name, Type type, int purpose) {
@@ -36,13 +30,41 @@ Net::Net(string name, Type type, int purpose) {
 Net::~Net() {
 }
 
-Func::Func() {
+Rule::Rule() {
+	guard = true;
+	assign = false;
 }
 
-Func::~Func() {
+Rule::Rule(expression assign, expression guard) {
+	this->guard = guard;
+	this->assign = assign;
 }
 
-int Func::netIndex(string name, int region) const {
+Rule::~Rule() {
+}
+
+ValRdy::ValRdy() {
+	valid = -1;
+	ready = -1;
+	data = -1;
+}
+
+ValRdy::~ValRdy() {
+}
+
+operand ValRdy::getValid() {
+	return operand(valid, operand::variable);
+}
+
+operand ValRdy::getReady() {
+	return operand(ready, operand::variable);
+}
+
+operand ValRdy::getData() {
+	return operand(data, operand::variable);
+}
+
+int Module::netIndex(string name, int region) const {
 	for (int i = 0; i < (int)nets.size(); i++) {
 		if (nets[i].name == name) {
 			return i;
@@ -52,7 +74,7 @@ int Func::netIndex(string name, int region) const {
 	return -1;
 }
 
-int Func::netIndex(string name, int region, bool define) {
+int Module::netIndex(string name, int region, bool define) {
 	for (int i = 0; i < (int)nets.size(); i++) {
 		if (nets[i].name == name) {
 			return i;
@@ -68,25 +90,17 @@ int Func::netIndex(string name, int region, bool define) {
 	return -1;
 }
 
-pair<string, int> Func::netAt(int uid) const {
+pair<string, int> Module::netAt(int uid) const {
 	return pair<string, int>(nets[uid].name, 0);
 }
 
-int Func::netCount() const {
+int Module::netCount() const {
 	return (int)nets.size();
 }
 
-int Func::pushNet(string name, Type type, int purpose) {
+int Module::pushNet(string name, Type type, int purpose) {
 	int index = (int)nets.size();
 	nets.push_back(Net(name, type, purpose));
-	return index;
-}
-
-int Func::pushCond() {
-	static int count = 0;
-
-	int index = (int)nets.size();
-	nets.push_back(Net("case_" + ::to_string(count++), Type(Type::BITS, 1), Net::COND));
 	return index;
 }
 

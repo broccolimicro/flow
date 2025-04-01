@@ -28,41 +28,38 @@ struct Type {
 	int shift;
 };
 
-struct Port {
-	Port();
-	Port(int index, Type type);
-	~Port();
+struct Net {
+	Net();
+	Net(string name, Type type=Type(Type::BITS, 1), int purpose=NONE);
+	~Net();
 
-	// index to the valid/request if an input channel
-	// index to the ready/acknowledge/enable if an output channel
-	int index;
+	enum {
+		NONE = 0,
+		IN = 1,
+		OUT = 2,
+		REG = 3,
+		COND = 4,
+	};
+
+	string name;
 	Type type;
+	int purpose;
 
-	// Based on cond for input ports
-	// Based on cond, from, and regs for output ports
-	expression token;
+	// INPUTS:
+	//   ready = active (expression of COND)       -> (~expr(valid) | expr(ready))
+	//   value is not used
+	// OUTPUTS:
+	//   valid = active (expression of COND)       -> expr(valid & ready)
+	//   data  = value  (expression of IN and REG) -> expr(data)
+	// REGISTERS:
+	//   write = active (expression of COND)       -> expr(valid & ready)
+	//   data  = value  (expression of IN and REG) -> expr(data)
+	// CONDITIONS:
+	//   valid = active (expression of IN and REG) -> is_valid(expr(valid, data)) evaluate encodings!
+	//   ready = value  (expression of OUT)        -> expr(ready)
+
+	expression active;
 	expression value;
-};
-
-struct Register {
-	Register();
-	Register(int index, Type type);
-	~Register();
-
-	int index;
-	Type type;
-	expression write;
-	expression value;
-};
-
-struct Condition {
-	Condition();
-	Condition(int index, expression req, expression en);
-	~Condition();
-
-	int index;
-	expression req;
-	expression en;
 };
 
 struct Func {
@@ -70,22 +67,16 @@ struct Func {
 	~Func();
 
 	string name;
-	ucs::variable_set vars;
 
-	vector<Port> from;
-	vector<Port> to;
-	vector<Register> regs;
+	vector<Net> nets;
 
-	// Based only on from, ready(to), and regs
-	vector<Condition> cond;
+	int netIndex(string name, int region=0) const;
+	int netIndex(string name, int region=0, bool define=false);
+	pair<string, int> netAt(int uid) const;
+	int netCount() const;
 
-	int pushFrom(string name, Type type);
-	int pushTo(string name, Type type);
-	int pushReg(string name, Type type);
-	int pushCond(expression req, expression en);
-
-	Port &portAt(int index);
-	Register &regAt(int index);
+	int pushNet(string name, Type type=Type(Type::BITS, 1), int purpose=Net::NONE);
+	int pushCond();
 };
 
 }
