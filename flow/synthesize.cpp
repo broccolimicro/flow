@@ -1,6 +1,8 @@
 #include "synthesize.h"
 
 #include <common/mapping.h>
+#include <interpret_arithmetic/export_verilog.h>
+
 
 namespace flow {
 
@@ -28,13 +30,13 @@ void synthesize_chan(clocked::Module &mod, const Net &net) {
 		result.ready = mod.pushNet(net.name+"_ready", wire, clocked::Net::IN);
 		int data = mod.pushNet(net.name+"_data", synthesize_type(net.type), clocked::Net::OUT);
 		result.data = mod.pushNet(net.name+"_state", synthesize_type(net.type), clocked::Net::REG);
-		mod.nets[data].rules.push_back(clocked::Rule(operand(result.data, operand::variable)));
+		mod.assign.push_back(clocked::Assign(data, operand(result.data, operand::variable)));
 	} else if (net.purpose == flow::Net::REG) {
 		result.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::WIRE);
 		result.ready = -1;
 		result.data = mod.pushNet(net.name+"_data", synthesize_type(net.type), clocked::Net::REG);
 	} else if (net.purpose == flow::Net::COND) {
-		result.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::WIRE);
+		result.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::REG);
 		result.ready = mod.pushNet(net.name+"_ready", wire, clocked::Net::WIRE);
 		result.data = -1;
 	}
@@ -74,21 +76,70 @@ clocked::Module synthesize_valrdy(const Func &func) {
 		}
 	}
 
-	for (int i = 0; i < (int)func.nets.size(); i++) {
-		if (func.nets[i].purpose == flow::Net::COND) {
-			expression ready = func.nets[i].value;
-			ready.apply(outToReady);
-			clocked::Rule rule(~result.chans[i].getValid() | ready);
-			result.nets[result.chans[i].ready].rules.push_back(rule);
+	for (auto i = func.conds.begin(); i != func.conds.end(); i++) {
+		expression ready = true;
+		for (auto j = i->outs.begin(); j != i->outs.end(); j++) {
+			ready = ready & operand(result.chans[j->first].ready, operand::variable);
 		}
+		result.assign.push_back(
+			clocked::Assign(result.chans[i->uid].ready,
+				~result.chans[i->uid].getValid() | ready, true));
+
+		expression valid = i->valid;
+		valid.apply(inregToData);
+		valid = is_valid(valid);
+
+		vector<clocked::Assign> assign;
+		vector<clocked::Assign> reset;
+		for (auto j = i->outs.begin(); j != i->outs.end(); j++) {
+			expression data = j->second;
+			data.apply(inregToData);
+			reset.push_back(clocked::Assign(result.chans[j->first].data, value(0)));
+			assign.push_back(clocked::Assign(result.chans[j->first].data, data));
+		}
+		reset.push_back(clocked::Assign(result.chans[i->uid].valid, false));
+		assign.push_back(clocked::Assign(result.chans[i->uid].valid, true));
+
+		result.blocks.push_back(
+			clocked::Block(operand(result.clk, operand::variable), {
+				clocked::Rule(assign,
+					valid & result.chans[i->uid].getReady()),
+				clocked::Rule({
+					clocked::Assign(result.chans[i->uid].valid, false)
+				}, result.chans[i->uid].getReady()),
+			}));
+		result.blocks.back().reset = reset;
 	}
 
-	/*for (int i = 0; i < (int)func.nets.size(); i++) {
+	for (int i = 0; i < (int)func.nets.size(); i++) {
 		if (func.nets[i].purpose == flow::Net::OUT) {
-			Rule rule(func.nets[i].active); //.apply(...); map from func.nets to result.nets, looking at the validity signals and data signals
-			result.nets[result.chans[i].valid].rules.push_back(rule);
+			expression valid = false;
+			for (auto j = func.conds.begin(); j != func.conds.end(); j++) {
+				for (auto k = j->outs.begin(); k != j->outs.end(); k++) {
+					if (k->first == i) {
+						valid = valid | operand(result.chans[j->uid].valid, operand::variable);
+					}
+				}
+			}
+
+			result.assign.push_back(
+				clocked::Assign(result.chans[i].valid, valid, true));
+		} else if (func.nets[i].purpose == flow::Net::IN) {
+			expression ready = false;
+			expression nvalid = true;
+			for (auto j = func.conds.begin(); j != func.conds.end(); j++) {
+				for (auto k = j->ins.begin(); k != j->ins.end(); k++) {
+					if (*k == i) {
+						nvalid = nvalid & ~operand(result.chans[j->uid].valid, operand::variable);
+						ready = ready | operand(result.chans[j->uid].ready, operand::variable);
+					}
+				}
+			}
+
+			result.assign.push_back(
+				clocked::Assign(result.chans[i].ready, nvalid | ready, true));
 		}
-	}*/
+	}
 
 	/*for (int i = 0; i < (int)from.size(); i++) {
 		string port = vars.nodes[from[i].index].to_string();

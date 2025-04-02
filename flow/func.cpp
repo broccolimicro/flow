@@ -36,6 +36,29 @@ Net::Net(string name, Type type, int purpose) {
 Net::~Net() {
 }
 
+Condition::Condition() {
+	this->uid = -1;
+}
+
+Condition::Condition(int uid, expression valid) {
+	this->uid = uid;
+	this->valid = valid;
+}
+
+Condition::~Condition() {
+}
+
+Input::Input() {
+	this->uid = -1;
+}
+
+Input::Input(int uid) {
+	this->uid = uid;
+}
+
+Input::~Input() {
+}
+
 Func::Func() {
 }
 
@@ -77,16 +100,16 @@ int Func::netCount() const {
 }
 
 int Func::pushNet(string name, Type type, int purpose) {
-	int index = (int)nets.size();
+	int uid = (int)nets.size();
 	nets.push_back(Net(name, type, purpose));
-	return index;
+	return uid;
 }
 
-int Func::pushCond() {
-	static int count = 0;
-
-	int index = (int)nets.size();
-	nets.push_back(Net("case_" + ::to_string(count++), Type(Type::BITS, 1), Net::COND));
+int Func::pushCond(expression valid) {
+	int uid = (int)nets.size();
+	int index = (int)conds.size();
+	conds.push_back(Condition(uid, valid));
+	nets.push_back(Net("case_" + ::to_string(index), Type(Type::BITS, 1), Net::COND));
 	return index;
 }
 

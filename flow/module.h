@@ -26,15 +26,6 @@ struct Type {
 	int shift;
 };
 
-struct Rule {
-	Rule();
-	Rule(expression assign, expression guard=true);
-	~Rule();
-
-	expression guard;
-	expression assign;
-};
-
 struct Net {
 	Net();
 	Net(string name, Type type=Type(Type::BITS, 1), int purpose=WIRE);
@@ -50,7 +41,6 @@ struct Net {
 	string name;
 	Type type;
 	int purpose;
-	vector<Rule> rules;
 };
 
 struct ValRdy {
@@ -66,12 +56,42 @@ struct ValRdy {
 	operand getData();
 };
 
+struct Assign {
+	Assign();
+	Assign(int net, expression expr, bool blocking=false);
+	~Assign();
+
+	int net;
+	expression expr;
+	bool blocking;
+};
+
+struct Rule {
+	Rule(vector<Assign> assign=vector<Assign>(), expression guard=true);
+	~Rule();
+
+	expression guard;
+	vector<Assign> assign;
+};
+
+struct Block {
+	Block(expression clk=true, vector<Rule> rules=vector<Rule>());
+	~Block();
+
+	expression clk;
+	vector<Assign> reset;
+	vector<Rule> rules;
+};
+
 struct Module {
 	string name;
 	vector<Net> nets;
 	vector<ValRdy> chans;
 	int reset;
 	int clk;
+
+	vector<Assign> assign;
+	vector<Block> blocks;
 
 	int netIndex(string name, int region=0) const;
 	int netIndex(string name, int region=0, bool define=false);

@@ -30,19 +30,6 @@ Net::Net(string name, Type type, int purpose) {
 Net::~Net() {
 }
 
-Rule::Rule() {
-	guard = true;
-	assign = false;
-}
-
-Rule::Rule(expression assign, expression guard) {
-	this->guard = guard;
-	this->assign = assign;
-}
-
-Rule::~Rule() {
-}
-
 ValRdy::ValRdy() {
 	valid = -1;
 	ready = -1;
@@ -62,6 +49,37 @@ operand ValRdy::getReady() {
 
 operand ValRdy::getData() {
 	return operand(data, operand::variable);
+}
+
+Assign::Assign() {
+	net = -1;
+	expr = false;
+	blocking = true;
+}
+
+Assign::Assign(int net, expression expr, bool blocking) {
+	this->net = net;
+	this->expr = expr;
+	this->blocking = blocking;
+}
+
+Assign::~Assign() {
+}
+
+Rule::Rule(vector<Assign> assign, expression guard) {
+	this->guard = guard;
+	this->assign = assign;
+}
+
+Rule::~Rule() {
+}
+
+Block::Block(expression clk, vector<Rule> rules) {
+	this->clk = clk;
+	this->rules = rules;
+}
+
+Block::~Block() {
 }
 
 int Module::netIndex(string name, int region) const {

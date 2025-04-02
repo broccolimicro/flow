@@ -44,22 +44,39 @@ struct Net {
 	string name;
 	Type type;
 	int purpose;
+};
 
-	// INPUTS:
-	//   ready = active (expression of COND)       -> (~expr(valid) | expr(ready))
-	//   value is not used
-	// OUTPUTS:
-	//   valid = active (expression of COND)       -> expr(valid & ready)
-	//   data  = value  (expression of IN and REG) -> expr(data)
-	// REGISTERS:
-	//   write = active (expression of COND)       -> expr(valid & ready)
-	//   data  = value  (expression of IN and REG) -> expr(data)
-	// CONDITIONS:
-	//   valid = active (expression of IN and REG) -> is_valid(expr(valid, data)) evaluate encodings!
-	//   ready = value  (expression of OUT)        -> expr(ready)
+struct Condition {
+	Condition();
+	Condition(int uid, expression valid);
+	~Condition();
 
-	expression active;
-	expression value;
+	// index into nets
+	int uid;
+
+	// expression of IN and REG -> is_valid(expr(valid, data)) evaluate encodings!
+	expression valid;
+
+	// derive ready from outs
+	// Output for each condition
+	// expression of IN and REG -> expr(data)
+	vector<pair<int, expression> > outs;
+	// Value to write for each condition
+	// expression of IN and REG -> expr(data)
+	vector<pair<int, expression> > regs;
+	vector<int> ins;
+};
+
+struct Input {
+	Input();
+	Input(int uid);
+	~Input();
+
+	// index into nets
+	int uid;
+
+	// Which conditions to acknowledge on
+	vector<int> ack;
 };
 
 struct Func {
@@ -70,13 +87,15 @@ struct Func {
 
 	vector<Net> nets;
 
+	vector<Condition> conds;
+
 	int netIndex(string name, int region=0) const;
 	int netIndex(string name, int region=0, bool define=false);
 	pair<string, int> netAt(int uid) const;
 	int netCount() const;
 
 	int pushNet(string name, Type type=Type(Type::BITS, 1), int purpose=Net::NONE);
-	int pushCond();
+	int pushCond(expression valid);
 };
 
 }
