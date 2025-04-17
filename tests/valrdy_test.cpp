@@ -5,15 +5,16 @@
 #include <interpret_flow/export.h>
 
 using namespace flow;
-using namespace arithmetic;
+using arithmetic::Expression;
+using arithmetic::Operand;
 
 TEST(ExportTest, Source) {
 	Func func;
 	func.name = "source";
-	int R = func.pushNet("R", Type(Type::FIXED, 16), flow::Net::OUT);
-	int case0 = func.pushCond(true);
+	Operand R = func.pushNet("R", Type(Type::FIXED, 16), flow::Net::OUT);
+	int case0 = func.pushCond(Operand(true));
 	
-	func.conds[case0].outs.push_back({R, value(0)});
+	func.conds[case0].req(R, Operand(0));
 
 	clocked::Module mod = synthesize_valrdy(func);
 	cout << export_module(mod).to_string() << endl;
@@ -22,10 +23,10 @@ TEST(ExportTest, Source) {
 TEST(ExportTest, Sink) {
 	Func func;
 	func.name = "sink";
-	int L = func.pushNet("L", Type(Type::FIXED, 16), flow::Net::IN);
-	int case0 = func.pushCond(operand(L, operand::variable));
+	Operand L = func.pushNet("L", Type(Type::FIXED, 16), flow::Net::IN);
+	int case0 = func.pushCond(L);
 	
-	func.conds[case0].ins.push_back(L);
+	func.conds[case0].ack(L);
 
 	clocked::Module mod = synthesize_valrdy(func);
 	cout << export_module(mod).to_string() << endl;
@@ -34,12 +35,12 @@ TEST(ExportTest, Sink) {
 TEST(ExportTest, Buffer) {
 	Func func;
 	func.name = "buffer";
-	int L = func.pushNet("L", Type(Type::FIXED, 16), flow::Net::IN);
-	int R = func.pushNet("R", Type(Type::FIXED, 16), flow::Net::OUT);
-	int case0 = func.pushCond(operand(L, operand::variable));
+	Operand L = func.pushNet("L", Type(Type::FIXED, 16), flow::Net::IN);
+	Operand R = func.pushNet("R", Type(Type::FIXED, 16), flow::Net::OUT);
+	int case0 = func.pushCond(L);
 	
-	func.conds[case0].outs.push_back({R, operand(L, operand::variable)});
-	func.conds[case0].ins.push_back(L);
+	func.conds[case0].req(R, L);
+	func.conds[case0].ack(L);
 
 	clocked::Module mod = synthesize_valrdy(func);
 	cout << export_module(mod).to_string() << endl;
@@ -48,14 +49,14 @@ TEST(ExportTest, Buffer) {
 TEST(ExportTest, Copy) {
 	Func func;
 	func.name = "copy";
-	int L = func.pushNet("L", Type(Type::FIXED, 16), flow::Net::IN);
-	int R0 = func.pushNet("R0", Type(Type::FIXED, 16), flow::Net::OUT);
-	int R1 = func.pushNet("R1", Type(Type::FIXED, 16), flow::Net::OUT);
-	int case0 = func.pushCond(operand(L, operand::variable));
+	Operand L = func.pushNet("L", Type(Type::FIXED, 16), flow::Net::IN);
+	Operand R0 = func.pushNet("R0", Type(Type::FIXED, 16), flow::Net::OUT);
+	Operand R1 = func.pushNet("R1", Type(Type::FIXED, 16), flow::Net::OUT);
+	int case0 = func.pushCond(L);
 	
-	func.conds[case0].outs.push_back({R0, operand(L, operand::variable)});
-	func.conds[case0].outs.push_back({R1, operand(L, operand::variable)});
-	func.conds[case0].ins.push_back(L);
+	func.conds[case0].req(R0, L);
+	func.conds[case0].req(R1, L);
+	func.conds[case0].ack(L);
 
 	clocked::Module mod = synthesize_valrdy(func);
 	cout << export_module(mod).to_string() << endl;
@@ -64,16 +65,14 @@ TEST(ExportTest, Copy) {
 TEST(ExportTest, Add) {
 	Func func;
 	func.name = "add";
-	int A = func.pushNet("A", Type(Type::FIXED, 16), flow::Net::IN);
-	int B = func.pushNet("B", Type(Type::FIXED, 16), flow::Net::IN);
-	int Ci = func.pushNet("Ci", Type(Type::FIXED, 1), flow::Net::IN);
-	int S = func.pushNet("S", Type(Type::FIXED, 17), flow::Net::OUT);
-	int case0 = func.pushCond(operand(A, operand::variable)&operand(B, operand::variable)&operand(Ci, operand::variable));
+	Operand A = func.pushNet("A", Type(Type::FIXED, 16), flow::Net::IN);
+	Operand B = func.pushNet("B", Type(Type::FIXED, 16), flow::Net::IN);
+	Operand Ci = func.pushNet("Ci", Type(Type::FIXED, 1), flow::Net::IN);
+	Operand S = func.pushNet("S", Type(Type::FIXED, 17), flow::Net::OUT);
+	int case0 = func.pushCond(A & B & Ci);
 	
-	func.conds[case0].outs.push_back({S, operand(A, operand::variable)+operand(B, operand::variable)+operand(Ci, operand::variable)});
-	func.conds[case0].ins.push_back(A);
-	func.conds[case0].ins.push_back(B);
-	func.conds[case0].ins.push_back(Ci);
+	func.conds[case0].req(S, A + B + Ci);
+	func.conds[case0].ack({A, B, Ci});
 
 	clocked::Module mod = synthesize_valrdy(func);
 	cout << export_module(mod).to_string() << endl;
@@ -82,20 +81,18 @@ TEST(ExportTest, Add) {
 TEST(ExportTest, Merge) {
 	Func func;
 	func.name = "merge";
-	int A = func.pushNet("A", Type(Type::FIXED, 16), flow::Net::IN);
-	int B = func.pushNet("B", Type(Type::FIXED, 16), flow::Net::IN);
-	int C = func.pushNet("C", Type(Type::FIXED, 1), flow::Net::IN);
-	int R = func.pushNet("R", Type(Type::FIXED, 16), flow::Net::OUT);
-	int case0 = func.pushCond((operand(C, operand::variable) == 0) & is_valid(operand(A, operand::variable)));
-	int case1 = func.pushCond((operand(C, operand::variable) == 1) & is_valid(operand(B, operand::variable)));
+	Operand A = func.pushNet("A", Type(Type::FIXED, 16), flow::Net::IN);
+	Operand B = func.pushNet("B", Type(Type::FIXED, 16), flow::Net::IN);
+	Operand C = func.pushNet("C", Type(Type::FIXED, 1), flow::Net::IN);
+	Operand R = func.pushNet("R", Type(Type::FIXED, 16), flow::Net::OUT);
+	int case0 = func.pushCond((C == 0) & isValid(A));
+	int case1 = func.pushCond((C == 1) & isValid(B));
 
-	func.conds[case0].outs.push_back({R, operand(A, operand::variable)});
-	func.conds[case0].ins.push_back(A);
-	func.conds[case0].ins.push_back(C);
+	func.conds[case0].req(R, A);
+	func.conds[case0].ack({C, A});
 
-	func.conds[case1].outs.push_back({R, operand(B, operand::variable)});
-	func.conds[case1].ins.push_back(B);
-	func.conds[case1].ins.push_back(C);
+	func.conds[case1].req(R, B);
+	func.conds[case1].ack({C, B});
 
 	clocked::Module mod = synthesize_valrdy(func);
 	cout << export_module(mod).to_string() << endl;
@@ -104,20 +101,18 @@ TEST(ExportTest, Merge) {
 TEST(ExportTest, Split) {
 	Func func;
 	func.name = "split";
-	int L = func.pushNet("L", Type(Type::FIXED, 16), flow::Net::IN);
-	int C = func.pushNet("C", Type(Type::FIXED, 1), flow::Net::IN);
-	int A = func.pushNet("A", Type(Type::FIXED, 16), flow::Net::OUT);
-	int B = func.pushNet("B", Type(Type::FIXED, 16), flow::Net::OUT);
-	int case0 = func.pushCond((operand(C, operand::variable) == 0) & is_valid(operand(L, operand::variable)));
-	int case1 = func.pushCond((operand(C, operand::variable) == 1) & is_valid(operand(L, operand::variable)));
+	Operand L = func.pushNet("L", Type(Type::FIXED, 16), flow::Net::IN);
+	Operand C = func.pushNet("C", Type(Type::FIXED, 1), flow::Net::IN);
+	Operand A = func.pushNet("A", Type(Type::FIXED, 16), flow::Net::OUT);
+	Operand B = func.pushNet("B", Type(Type::FIXED, 16), flow::Net::OUT);
+	int case0 = func.pushCond((C == 0) & isValid(L));
+	int case1 = func.pushCond((C == 1) & isValid(L));
 
-	func.conds[case0].outs.push_back({A, operand(L, operand::variable)});
-	func.conds[case0].ins.push_back(L);
-	func.conds[case0].ins.push_back(C);
+	func.conds[case0].req(A, L);
+	func.conds[case0].ack({C, L});
 
-	func.conds[case1].outs.push_back({B, operand(L, operand::variable)});
-	func.conds[case1].ins.push_back(L);
-	func.conds[case1].ins.push_back(C);
+	func.conds[case1].req(B, L);
+	func.conds[case1].ack({C, L});
 
 	clocked::Module mod = synthesize_valrdy(func);
 	cout << export_module(mod).to_string() << endl;

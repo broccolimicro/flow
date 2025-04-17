@@ -7,7 +7,8 @@
 #include <stdio.h>
 
 using namespace std;
-using namespace arithmetic;
+using arithmetic::Expression;
+using arithmetic::Operand;
 
 namespace clocked {
 
@@ -51,34 +52,34 @@ struct ValRdy {
 	int ready;
 	int data;
 
-	operand getValid();
-	operand getReady();
-	operand getData();
+	Operand getValid();
+	Operand getReady();
+	Operand getData();
 };
 
 struct Assign {
 	Assign();
-	Assign(int net, expression expr, bool blocking=false);
+	Assign(int net, Expression expr, bool blocking=false);
 	~Assign();
 
 	int net;
-	expression expr;
+	Expression expr;
 	bool blocking;
 };
 
 struct Rule {
-	Rule(vector<Assign> assign=vector<Assign>(), expression guard=true);
+	Rule(vector<Assign> assign=vector<Assign>(), Expression guard=Operand(true));
 	~Rule();
 
-	expression guard;
+	Expression guard;
 	vector<Assign> assign;
 };
 
 struct Block {
-	Block(expression clk=true, vector<Rule> rules=vector<Rule>());
+	Block(Expression clk=Operand(true), vector<Rule> rules=vector<Rule>());
 	~Block();
 
-	expression clk;
+	Expression clk;
 	vector<Assign> reset;
 	vector<Rule> rules;
 };

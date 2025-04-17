@@ -9,7 +9,8 @@
 #include <ucs/variable.h>
 
 using namespace std;
-using namespace arithmetic;
+using arithmetic::Expression;
+using arithmetic::Operand;
 
 namespace flow {
 
@@ -48,23 +49,27 @@ struct Net {
 
 struct Condition {
 	Condition();
-	Condition(int uid, expression valid);
+	Condition(int uid, Expression valid);
 	~Condition();
 
 	// index into nets
 	int uid;
 
 	// expression of IN and REG -> is_valid(expr(valid, data)) evaluate encodings!
-	expression valid;
+	Expression valid;
 
 	// derive ready from outs
 	// Output for each condition
 	// expression of IN and REG -> expr(data)
-	vector<pair<int, expression> > outs;
+	vector<pair<int, Expression> > outs;
 	// Value to write for each condition
 	// expression of IN and REG -> expr(data)
-	vector<pair<int, expression> > regs;
+	vector<pair<int, Expression> > regs;
 	vector<int> ins;
+
+	void req(Operand out, Expression expr);
+	void ack(Operand in);
+	void ack(vector<Operand> in);
 };
 
 struct Input {
@@ -94,8 +99,8 @@ struct Func {
 	pair<string, int> netAt(int uid) const;
 	int netCount() const;
 
-	int pushNet(string name, Type type=Type(Type::BITS, 1), int purpose=Net::NONE);
-	int pushCond(expression valid);
+	Operand pushNet(string name, Type type=Type(Type::BITS, 1), int purpose=Net::NONE);
+	int pushCond(Expression valid);
 };
 
 }

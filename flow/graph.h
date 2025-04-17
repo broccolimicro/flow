@@ -11,7 +11,8 @@
 #include "func.h"
 
 using namespace std;
-using namespace arithmetic;
+using arithmetic::Expression;
+using arithmetic::Operand;
 
 namespace flow {
 

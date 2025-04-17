@@ -39,25 +39,24 @@ ValRdy::ValRdy() {
 ValRdy::~ValRdy() {
 }
 
-operand ValRdy::getValid() {
-	return operand(valid, operand::variable);
+Operand ValRdy::getValid() {
+	return Operand::varOf(valid);
 }
 
-operand ValRdy::getReady() {
-	return operand(ready, operand::variable);
+Operand ValRdy::getReady() {
+	return Operand::varOf(ready);
 }
 
-operand ValRdy::getData() {
-	return operand(data, operand::variable);
+Operand ValRdy::getData() {
+	return Operand::varOf(data);
 }
 
 Assign::Assign() {
 	net = -1;
-	expr = false;
 	blocking = true;
 }
 
-Assign::Assign(int net, expression expr, bool blocking) {
+Assign::Assign(int net, Expression expr, bool blocking) {
 	this->net = net;
 	this->expr = expr;
 	this->blocking = blocking;
@@ -66,7 +65,7 @@ Assign::Assign(int net, expression expr, bool blocking) {
 Assign::~Assign() {
 }
 
-Rule::Rule(vector<Assign> assign, expression guard) {
+Rule::Rule(vector<Assign> assign, Expression guard) {
 	this->guard = guard;
 	this->assign = assign;
 }
@@ -74,7 +73,7 @@ Rule::Rule(vector<Assign> assign, expression guard) {
 Rule::~Rule() {
 }
 
-Block::Block(expression clk, vector<Rule> rules) {
+Block::Block(Expression clk, vector<Rule> rules) {
 	this->clk = clk;
 	this->rules = rules;
 }

@@ -30,7 +30,7 @@ void synthesize_chan(clocked::Module &mod, const Net &net) {
 		result.ready = mod.pushNet(net.name+"_ready", wire, clocked::Net::IN);
 		int data = mod.pushNet(net.name+"_data", synthesize_type(net.type), clocked::Net::OUT);
 		result.data = mod.pushNet(net.name+"_state", synthesize_type(net.type), clocked::Net::REG);
-		mod.assign.push_back(clocked::Assign(data, operand(result.data, operand::variable)));
+		mod.assign.push_back(clocked::Assign(data, Operand::varOf(result.data)));
 	} else if (net.purpose == flow::Net::REG) {
 		result.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::WIRE);
 		result.ready = -1;
@@ -60,13 +60,13 @@ clocked::Module synthesize_valrdy(const Func &func) {
 	mapping condToReady;
 	mapping inregToData;
 	mapping outToReady;
-	vector<expression> condToValRdy;
+	vector<Expression> condToValRdy;
 	for (int i = 0; i < (int)func.nets.size(); i++) {
 		if (func.nets[i].purpose == flow::Net::COND) {
 			condToValid.set(i, result.chans[i].valid);
 			condToReady.set(i, result.chans[i].ready);
 			if (i >= (int)condToValRdy.size()) {
-				condToValRdy.resize(i+1, expression());
+				condToValRdy.resize(i+1, Expression());
 			}
 			condToValRdy[i] = result.chans[i].getValid() & result.chans[i].getReady();
 		} else if (func.nets[i].purpose == flow::Net::IN or func.nets[i].purpose == flow::Net::REG) {
@@ -77,35 +77,37 @@ clocked::Module synthesize_valrdy(const Func &func) {
 	}
 
 	for (auto i = func.conds.begin(); i != func.conds.end(); i++) {
-		expression ready = true;
+		Expression ready = Operand(true);
 		for (auto j = i->outs.begin(); j != i->outs.end(); j++) {
-			ready = ready & operand(result.chans[j->first].ready, operand::variable);
+			ready = ready & Operand::varOf(result.chans[j->first].ready);
 		}
+		ready = ~result.chans[i->uid].getValid() | ready;
+		ready.minimize();
 		result.assign.push_back(
-			clocked::Assign(result.chans[i->uid].ready,
-				~result.chans[i->uid].getValid() | ready, true));
+			clocked::Assign(result.chans[i->uid].ready, ready, true));
 
-		expression valid = i->valid;
+		Expression valid = i->valid;
 		valid.apply(inregToData);
-		valid = is_valid(valid);
+		valid = isValid(valid);
+		valid.minimize();
 
 		vector<clocked::Assign> assign;
 		vector<clocked::Assign> reset;
 		for (auto j = i->outs.begin(); j != i->outs.end(); j++) {
-			expression data = j->second;
+			Expression data = j->second;
 			data.apply(inregToData);
-			reset.push_back(clocked::Assign(result.chans[j->first].data, value(0)));
+			reset.push_back(clocked::Assign(result.chans[j->first].data, Operand::intOf(0)));
 			assign.push_back(clocked::Assign(result.chans[j->first].data, data));
 		}
-		reset.push_back(clocked::Assign(result.chans[i->uid].valid, false));
-		assign.push_back(clocked::Assign(result.chans[i->uid].valid, true));
+		reset.push_back(clocked::Assign(result.chans[i->uid].valid, Operand(false)));
+		assign.push_back(clocked::Assign(result.chans[i->uid].valid, Operand(true)));
 
 		result.blocks.push_back(
-			clocked::Block(operand(result.clk, operand::variable), {
+			clocked::Block(Operand::varOf(result.clk), {
 				clocked::Rule(assign,
 					valid & result.chans[i->uid].getReady()),
 				clocked::Rule({
-					clocked::Assign(result.chans[i->uid].valid, false)
+					clocked::Assign(result.chans[i->uid].valid, Operand(false))
 				}, result.chans[i->uid].getReady()),
 			}));
 		result.blocks.back().reset = reset;
@@ -113,31 +115,36 @@ clocked::Module synthesize_valrdy(const Func &func) {
 
 	for (int i = 0; i < (int)func.nets.size(); i++) {
 		if (func.nets[i].purpose == flow::Net::OUT) {
-			expression valid = false;
+			Expression valid = Operand(false);
 			for (auto j = func.conds.begin(); j != func.conds.end(); j++) {
 				for (auto k = j->outs.begin(); k != j->outs.end(); k++) {
 					if (k->first == i) {
-						valid = valid | operand(result.chans[j->uid].valid, operand::variable);
+						valid = valid | Operand::varOf(result.chans[j->uid].valid);
 					}
 				}
 			}
+			valid.minimize();
 
 			result.assign.push_back(
 				clocked::Assign(result.chans[i].valid, valid, true));
 		} else if (func.nets[i].purpose == flow::Net::IN) {
-			expression ready = false;
-			expression nvalid = true;
+			Expression ready = Operand(false);
+			Expression nvalid = Operand(true);
 			for (auto j = func.conds.begin(); j != func.conds.end(); j++) {
 				for (auto k = j->ins.begin(); k != j->ins.end(); k++) {
 					if (*k == i) {
-						nvalid = nvalid & ~operand(result.chans[j->uid].valid, operand::variable);
-						ready = ready | operand(result.chans[j->uid].ready, operand::variable);
+						nvalid = nvalid & ~Operand::varOf(result.chans[j->uid].valid);
+						ready = ready | Operand::varOf(result.chans[j->uid].ready);
 					}
 				}
 			}
+			Expression ready_out = nvalid | ready;
+			cout << ready_out << endl;
+			ready_out.minimize();
+			cout << ready_out << endl;
 
 			result.assign.push_back(
-				clocked::Assign(result.chans[i].ready, nvalid | ready, true));
+				clocked::Assign(result.chans[i].ready, ready_out, true));
 		}
 	}
 

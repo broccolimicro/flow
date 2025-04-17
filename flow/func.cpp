@@ -40,12 +40,35 @@ Condition::Condition() {
 	this->uid = -1;
 }
 
-Condition::Condition(int uid, expression valid) {
+Condition::Condition(int uid, Expression valid) {
 	this->uid = uid;
 	this->valid = valid;
 }
 
 Condition::~Condition() {
+}
+
+void Condition::req(Operand out, Expression expr) {
+	if (not out.isVar()) {
+		return;
+	}
+	outs.push_back({out.index, expr});
+}
+
+void Condition::ack(Operand in) {
+	if (not in.isVar()) {
+		return;
+	}
+	ins.push_back(in.index);
+}
+
+void Condition::ack(vector<Operand> in) {
+	for (auto i = in.begin(); i != in.end(); i++) {
+		if (not i->isVar()) {
+			continue;
+		}
+		ins.push_back(i->index);
+	}
 }
 
 Input::Input() {
@@ -99,13 +122,13 @@ int Func::netCount() const {
 	return (int)nets.size();
 }
 
-int Func::pushNet(string name, Type type, int purpose) {
+Operand Func::pushNet(string name, Type type, int purpose) {
 	int uid = (int)nets.size();
 	nets.push_back(Net(name, type, purpose));
-	return uid;
+	return Operand::varOf(uid);
 }
 
-int Func::pushCond(expression valid) {
+int Func::pushCond(Expression valid) {
 	int uid = (int)nets.size();
 	int index = (int)conds.size();
 	conds.push_back(Condition(uid, valid));
