@@ -6,8 +6,6 @@
 #include <string>
 #include <stdio.h>
 
-#include <ucs/variable.h>
-
 #include "func.h"
 
 using namespace std;

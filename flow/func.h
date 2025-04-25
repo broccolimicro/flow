@@ -6,8 +6,6 @@
 #include <string>
 #include <stdio.h>
 
-#include <ucs/variable.h>
-
 using namespace std;
 using arithmetic::Expression;
 using arithmetic::Operand;

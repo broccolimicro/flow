@@ -3,7 +3,6 @@
 #include <common/mapping.h>
 #include <interpret_arithmetic/export_verilog.h>
 
-
 namespace flow {
 
 clocked::Type synthesize_type(const Type &type) {
