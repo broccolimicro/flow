@@ -26,7 +26,7 @@ Net::Net() {
 	purpose = NONE;
 }
 
-Net::Net(string name, Type type, int purpose) {
+Net::Net(ucs::Net name, Type type, int purpose) {
 	this->name = name;
 	this->type = type;
 	this->purpose = purpose;
@@ -87,7 +87,7 @@ Func::Func() {
 Func::~Func() {
 }
 
-int Func::netIndex(string name, int region) const {
+int Func::netIndex(ucs::Net name) const {
 	for (int i = 0; i < (int)nets.size(); i++) {
 		if (nets[i].name == name) {
 			return i;
@@ -97,7 +97,7 @@ int Func::netIndex(string name, int region) const {
 	return -1;
 }
 
-int Func::netIndex(string name, int region, bool define) {
+int Func::netIndex(ucs::Net name, bool define) {
 	for (int i = 0; i < (int)nets.size(); i++) {
 		if (nets[i].name == name) {
 			return i;
@@ -113,15 +113,15 @@ int Func::netIndex(string name, int region, bool define) {
 	return -1;
 }
 
-pair<string, int> Func::netAt(int uid) const {
-	return pair<string, int>(nets[uid].name, 0);
+ucs::Net Func::netAt(int uid) const {
+	return nets[uid].name;
 }
 
 int Func::netCount() const {
 	return (int)nets.size();
 }
 
-Operand Func::pushNet(string name, Type type, int purpose) {
+Operand Func::pushNet(ucs::Net name, Type type, int purpose) {
 	int uid = (int)nets.size();
 	nets.push_back(Net(name, type, purpose));
 	return Operand::varOf(uid);

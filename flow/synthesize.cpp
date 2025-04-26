@@ -21,22 +21,22 @@ void synthesize_chan(clocked::Module &mod, const Net &net) {
 	static const clocked::Type wire(clocked::Type::BITS, 1);
 	clocked::ValRdy result;
 	if (net.purpose == flow::Net::IN) {
-		result.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::IN);
-		result.ready = mod.pushNet(net.name+"_ready", wire, clocked::Net::OUT);
-		result.data = mod.pushNet(net.name+"_data", synthesize_type(net.type), clocked::Net::IN);
+		result.valid = mod.pushNet(net.name.postfix("_valid"), wire, clocked::Net::IN);
+		result.ready = mod.pushNet(net.name.postfix("_ready"), wire, clocked::Net::OUT);
+		result.data = mod.pushNet(net.name.postfix("_data"), synthesize_type(net.type), clocked::Net::IN);
 	} else if (net.purpose == flow::Net::OUT) {
-		result.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::OUT);
-		result.ready = mod.pushNet(net.name+"_ready", wire, clocked::Net::IN);
-		int data = mod.pushNet(net.name+"_data", synthesize_type(net.type), clocked::Net::OUT);
-		result.data = mod.pushNet(net.name+"_state", synthesize_type(net.type), clocked::Net::REG);
+		result.valid = mod.pushNet(net.name.postfix("_valid"), wire, clocked::Net::OUT);
+		result.ready = mod.pushNet(net.name.postfix("_ready"), wire, clocked::Net::IN);
+		int data = mod.pushNet(net.name.postfix("_data"), synthesize_type(net.type), clocked::Net::OUT);
+		result.data = mod.pushNet(net.name.postfix("_state"), synthesize_type(net.type), clocked::Net::REG);
 		mod.assign.push_back(clocked::Assign(data, Operand::varOf(result.data)));
 	} else if (net.purpose == flow::Net::REG) {
-		result.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::WIRE);
+		result.valid = mod.pushNet(net.name.postfix("_valid"), wire, clocked::Net::WIRE);
 		result.ready = -1;
-		result.data = mod.pushNet(net.name+"_data", synthesize_type(net.type), clocked::Net::REG);
+		result.data = mod.pushNet(net.name.postfix("_data"), synthesize_type(net.type), clocked::Net::REG);
 	} else if (net.purpose == flow::Net::COND) {
-		result.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::REG);
-		result.ready = mod.pushNet(net.name+"_ready", wire, clocked::Net::WIRE);
+		result.valid = mod.pushNet(net.name.postfix("_valid"), wire, clocked::Net::REG);
+		result.ready = mod.pushNet(net.name.postfix("_ready"), wire, clocked::Net::WIRE);
 		result.data = -1;
 	}
 	mod.chans.push_back(result);
@@ -46,8 +46,8 @@ clocked::Module synthesize_valrdy(const Func &func) {
 	clocked::Module result;
 	result.name = func.name;
 
-	result.reset = result.pushNet("reset", clocked::Type(clocked::Type::BITS, 1), clocked::Net::IN);
-	result.clk = result.pushNet("clk", clocked::Type(clocked::Type::BITS, 1), clocked::Net::IN);
+	result.reset = result.pushNet(ucs::Net("reset"), clocked::Type(clocked::Type::BITS, 1), clocked::Net::IN);
+	result.clk = result.pushNet(ucs::Net("clk"), clocked::Type(clocked::Type::BITS, 1), clocked::Net::IN);
 
 	// create variables for each channel
 	for (int i = 0; i < (int)func.nets.size(); i++) {

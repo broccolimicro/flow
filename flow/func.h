@@ -1,5 +1,6 @@
 #pragma once
 
+#include <common/net.h>
 #include <arithmetic/expression.h>
 
 #include <vector>
@@ -29,7 +30,7 @@ struct Type {
 
 struct Net {
 	Net();
-	Net(string name, Type type=Type(Type::BITS, 1), int purpose=NONE);
+	Net(ucs::Net name, Type type=Type(Type::BITS, 1), int purpose=NONE);
 	~Net();
 
 	enum {
@@ -40,7 +41,7 @@ struct Net {
 		COND = 4,
 	};
 
-	string name;
+	ucs::Net name;
 	Type type;
 	int purpose;
 };
@@ -92,12 +93,12 @@ struct Func {
 
 	vector<Condition> conds;
 
-	int netIndex(string name, int region=0) const;
-	int netIndex(string name, int region=0, bool define=false);
-	pair<string, int> netAt(int uid) const;
+	int netIndex(ucs::Net name) const;
+	int netIndex(ucs::Net name, bool define=false);
+	ucs::Net netAt(int uid) const;
 	int netCount() const;
 
-	Operand pushNet(string name, Type type=Type(Type::BITS, 1), int purpose=Net::NONE);
+	Operand pushNet(ucs::Net name, Type type=Type(Type::BITS, 1), int purpose=Net::NONE);
 	int pushCond(Expression valid);
 };
 

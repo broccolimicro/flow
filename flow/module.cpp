@@ -21,7 +21,7 @@ Net::Net() {
 	this->purpose = WIRE;
 }
 
-Net::Net(string name, Type type, int purpose) {
+Net::Net(ucs::Net name, Type type, int purpose) {
 	this->name = name;
 	this->type = type;
 	this->purpose = purpose;
@@ -81,7 +81,7 @@ Block::Block(Expression clk, vector<Rule> rules) {
 Block::~Block() {
 }
 
-int Module::netIndex(string name, int region) const {
+int Module::netIndex(ucs::Net name) const {
 	for (int i = 0; i < (int)nets.size(); i++) {
 		if (nets[i].name == name) {
 			return i;
@@ -91,7 +91,7 @@ int Module::netIndex(string name, int region) const {
 	return -1;
 }
 
-int Module::netIndex(string name, int region, bool define) {
+int Module::netIndex(ucs::Net name, bool define) {
 	for (int i = 0; i < (int)nets.size(); i++) {
 		if (nets[i].name == name) {
 			return i;
@@ -107,15 +107,15 @@ int Module::netIndex(string name, int region, bool define) {
 	return -1;
 }
 
-pair<string, int> Module::netAt(int uid) const {
-	return pair<string, int>(nets[uid].name, 0);
+ucs::Net Module::netAt(int uid) const {
+	return nets[uid].name;
 }
 
 int Module::netCount() const {
 	return (int)nets.size();
 }
 
-int Module::pushNet(string name, Type type, int purpose) {
+int Module::pushNet(ucs::Net name, Type type, int purpose) {
 	int index = (int)nets.size();
 	nets.push_back(Net(name, type, purpose));
 	return index;
