@@ -30,7 +30,7 @@ struct Type {
 
 struct Net {
 	Net();
-	Net(ucs::Net name, Type type=Type(Type::BITS, 1), int purpose=WIRE);
+	Net(string name, Type type=Type(Type::BITS, 1), int purpose=WIRE);
 	~Net();
 
 	enum {
@@ -40,7 +40,7 @@ struct Net {
 		REG = 3,
 	};
 
-	ucs::Net name;
+	string name;
 	Type type;
 	int purpose;
 };
@@ -95,12 +95,12 @@ struct Module {
 	vector<Assign> assign;
 	vector<Block> blocks;
 
-	int netIndex(ucs::Net) const;
-	int netIndex(ucs::Net, bool define=false);
-	ucs::Net netAt(int uid) const;
+	int netIndex(string) const;
+	int netIndex(string, bool define=false);
+	string netAt(int uid) const;
 	int netCount() const;
 
-	int pushNet(ucs::Net name, Type type=Type(Type::BITS, 1), int purpose=Net::WIRE);
+	int pushNet(string name, Type type=Type(Type::BITS, 1), int purpose=Net::WIRE);
 };
 
 }

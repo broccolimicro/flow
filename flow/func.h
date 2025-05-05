@@ -30,7 +30,7 @@ struct Type {
 
 struct Net {
 	Net();
-	Net(ucs::Net name, Type type=Type(Type::BITS, 1), int purpose=NONE);
+	Net(string name, Type type=Type(Type::BITS, 1), int purpose=NONE);
 	~Net();
 
 	enum {
@@ -41,7 +41,7 @@ struct Net {
 		COND = 4,
 	};
 
-	ucs::Net name;
+	string name;
 	Type type;
 	int purpose;
 };
@@ -93,12 +93,12 @@ struct Func {
 
 	vector<Condition> conds;
 
-	int netIndex(ucs::Net name) const;
-	int netIndex(ucs::Net name, bool define=false);
-	ucs::Net netAt(int uid) const;
+	int netIndex(string name) const;
+	int netIndex(string name, bool define=false);
+	string netAt(int uid) const;
 	int netCount() const;
 
-	Operand pushNet(ucs::Net name, Type type=Type(Type::BITS, 1), int purpose=Net::NONE);
+	Operand pushNet(string name, Type type=Type(Type::BITS, 1), int purpose=Net::NONE);
 	int pushCond(Expression valid);
 };
 
