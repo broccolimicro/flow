@@ -117,3 +117,53 @@ TEST(ExportTest, Split) {
 	clocked::Module mod = synthesize_valrdy(func);
 	cout << export_module(mod).to_string() << endl;
 }
+
+TEST(ExportTest, DSAdder) {
+	Func func;
+	func.name = "digit-serial adder";
+	int N = 4;  // Adder width
+
+	Operand Ad = func.pushNet("Ad", Type(Type::FIXED, N), flow::Net::IN);
+	Operand Ac = func.pushNet("Ac", Type(Type::FIXED, 1), flow::Net::IN);
+	Operand Bd = func.pushNet("Bd", Type(Type::FIXED, N), flow::Net::IN);
+	Operand Bc = func.pushNet("Bc", Type(Type::FIXED, 1), flow::Net::IN);
+	Operand Sd  = func.pushNet("Sd",  Type(Type::FIXED, N), flow::Net::OUT);
+	Operand Sc = func.pushNet("Sc", Type(Type::FIXED, 1), flow::Net::OUT);
+	Operand ci = func.pushNet("ci", Type(Type::FIXED, 1), flow::Net::REG);
+	Expression s((Ad + Bd + ci) % pow(2, N));
+	Expression co((Ad + Bd + ci) / pow(2, N));
+
+	int case0 = func.pushCond(~Ac & ~Bc);
+	func.conds[case0].req(Sd, s);
+	func.conds[case0].req(Sc, Operand::intOf(0));
+	func.conds[case0].mem(ci, co);
+	func.conds[case0].ack({Ac, Ad, Bc, Bd});
+
+	int case1 = func.pushCond(Ac & ~Bc);
+	func.conds[case1].req(Sd, s);
+	func.conds[case1].req(Sc, Operand::intOf(0));
+	func.conds[case1].mem(ci, co);
+	func.conds[case1].ack({Bc, Bd});
+
+	int case2 = func.pushCond(~Ac & Bc);
+	func.conds[case2].req(Sd, s);
+	func.conds[case2].req(Sc, Operand::intOf(0));
+	func.conds[case2].mem(ci, co);
+	func.conds[case2].ack({Ac, Ad});
+
+	int case3 = func.pushCond(Ac & Bc & (co != ci));
+	func.conds[case3].req(Sd, s);
+	func.conds[case3].req(Sc, Operand::intOf(0));
+	func.conds[case3].mem(ci, co);
+
+	int case4 = func.pushCond(Ac & Bc & (co == ci));
+	func.conds[case4].req(Sd, s);
+	func.conds[case4].req(Sc, Operand::intOf(1));
+	func.conds[case4].mem(ci, Operand::intOf(0));
+	func.conds[case0].ack({Ac, Ad, Bc, Bd});
+
+	EXPECT_EQ(func.conds.size(), 5);
+
+	//clocked::Module mod = synthesize_valrdy(func);
+	//cout << export_module(mod).to_string() << endl;
+}

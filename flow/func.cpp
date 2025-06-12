@@ -54,6 +54,13 @@ void Condition::req(Operand out, Expression expr) {
 	outs.push_back({out.index, expr});
 }
 
+void Condition::mem(Operand mem, Expression expr) {
+	if (not mem.isVar()) {
+		return;
+	}
+	regs.push_back({mem.index, expr});
+}
+
 void Condition::ack(Operand in) {
 	if (not in.isVar()) {
 		return;

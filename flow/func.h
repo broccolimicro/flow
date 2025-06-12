@@ -67,6 +67,7 @@ struct Condition {
 	vector<int> ins;
 
 	void req(Operand out, Expression expr);
+	void mem(Operand mem, Expression expr);
 	void ack(Operand in);
 	void ack(vector<Operand> in);
 };
