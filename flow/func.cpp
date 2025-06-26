@@ -2,8 +2,10 @@
 
 #include <parse_expression/expression.h>
 #include <interpret_arithmetic/export.h>
+#include <arithmetic/expression.h>
 
 #include <stdexcept>
+#include <compare>
 
 namespace flow {
 
@@ -20,6 +22,12 @@ Type::Type(int type, int width, int shift) {
 }
 
 Type::~Type() {
+}
+
+std::ostream& operator<<(std::ostream& os, const Type& type) {
+    return os << "(type = " << type.type
+              << ", width = " << type.width
+              << ", shift = " << type.shift << ")";
 }
 
 Net::Net() {
@@ -45,6 +53,53 @@ Condition::Condition(int uid, Expression valid) {
 }
 
 Condition::~Condition() {
+}
+
+std::ostream& operator<<(std::ostream& os, const Condition& cond) {
+	os << "Condition(uid: " << cond.uid << ", "
+		<< "valid: {" << endl << cond.valid.to_string() << endl << "}";
+
+	os << endl << "==>  ins: [";
+	for (size_t i = 0; i < cond.ins.size(); ++i) {
+		if (i > 0) { os << ", "; }
+		os << cond.ins[i];
+	}
+	os << "]" << endl;
+
+	os << endl << "==>  outs: [" << endl;
+	for (size_t i = 0; i < cond.outs.size(); ++i) {
+		if (i > 0) { os << "," << endl; }
+		os << "<" << cond.outs[i].first << ">{" << endl << cond.outs[i].second.to_string() << endl << "}";
+	}
+	os << "]" << endl;
+
+	os << endl << "==>  regs: [" << endl;
+	for (size_t i = 0; i < cond.regs.size(); ++i) {
+		if (i > 0) { os << "," << endl; }
+		os << "<" << cond.regs[i].first << ">{" << endl << cond.regs[i].second.to_string() << endl << "}";
+	}
+	os << "]";
+	return os;
+}
+
+auto Condition::operator<=>(const Condition &other) const {
+	if (auto cmp = uid <=> other.uid; cmp != 0) return cmp;
+	if (auto cmp = areSame(valid, other.valid); !cmp) return std::strong_ordering::less; // assume areSame returns bool
+	if (auto cmp = ins <=> other.ins; cmp != 0) return cmp;
+
+	if (auto cmp = outs.size() <=> other.outs.size(); cmp != 0) return cmp;
+	for (size_t i = 0; i < outs.size(); ++i) {
+		if (auto cmp = outs[i].first <=> other.outs[i].first; cmp != 0) return cmp;
+		if (!areSame(outs[i].second, other.outs[i].second)) return std::strong_ordering::less;
+	}
+
+	if (auto cmp = regs.size() <=> other.regs.size(); cmp != 0) return cmp;
+	for (size_t i = 0; i < regs.size(); ++i) {
+		if (auto cmp = regs[i].first <=> other.regs[i].first; cmp != 0) return cmp;
+		if (!areSame(regs[i].second, other.regs[i].second)) return std::strong_ordering::less;
+	}
+
+	return std::strong_ordering::equal;
 }
 
 void Condition::req(Operand out, Expression expr) {

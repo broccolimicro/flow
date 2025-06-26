@@ -26,7 +26,11 @@ struct Type {
 	int type;
 	int width;
 	int shift;
+
+	auto operator<=>(const Type &t) const = default;
+	friend std::ostream& operator<<(std::ostream& os, const Type& t);
 };
+
 
 struct Net {
 	Net();
@@ -70,7 +74,12 @@ struct Condition {
 	void mem(Operand mem, Expression expr);
 	void ack(Operand in);
 	void ack(vector<Operand> in);
+
+	auto operator<=>(const Condition &cond) const;
+	friend std::ostream& operator<<(std::ostream& os, const Condition& cond);
 };
+
+
 
 struct Input {
 	Input();
@@ -102,5 +111,4 @@ struct Func {
 	Operand pushNet(string name, Type type=Type(Type::BITS, 1), int purpose=Net::NONE);
 	int pushCond(Expression valid);
 };
-
 }
