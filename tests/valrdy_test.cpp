@@ -69,9 +69,9 @@ TEST(ExportTest, Add) {
 	Operand B = func.pushNet("B", Type(Type::FIXED, 16), flow::Net::IN);
 	Operand Ci = func.pushNet("Ci", Type(Type::FIXED, 1), flow::Net::IN);
 	Operand S = func.pushNet("S", Type(Type::FIXED, 17), flow::Net::OUT);
-	int case0 = func.pushCond(A & B & Ci);
+	int case0 = func.pushCond(Expression(A) & B & Ci);
 	
-	func.conds[case0].req(S, A + B + Ci);
+	func.conds[case0].req(S, Expression(A) + B + Ci);
 	func.conds[case0].ack({A, B, Ci});
 
 	clocked::Module mod = synthesize_valrdy(func);
@@ -85,8 +85,8 @@ TEST(ExportTest, Merge) {
 	Operand B = func.pushNet("B", Type(Type::FIXED, 16), flow::Net::IN);
 	Operand C = func.pushNet("C", Type(Type::FIXED, 1), flow::Net::IN);
 	Operand R = func.pushNet("R", Type(Type::FIXED, 16), flow::Net::OUT);
-	int case0 = func.pushCond((C == 0) & isValid(A));
-	int case1 = func.pushCond((C == 1) & isValid(B));
+	int case0 = func.pushCond((Expression(C) == 0) & isValid(A));
+	int case1 = func.pushCond((Expression(C) == 1) & isValid(B));
 
 	func.conds[case0].req(R, A);
 	func.conds[case0].ack({C, A});
@@ -130,33 +130,33 @@ TEST(ExportTest, DSAdder) {
 	Operand Sd  = func.pushNet("Sd",  Type(Type::FIXED, N), flow::Net::OUT);
 	Operand Sc = func.pushNet("Sc", Type(Type::FIXED, 1), flow::Net::OUT);
 	Operand ci = func.pushNet("ci", Type(Type::FIXED, 1), flow::Net::REG);
-	Expression s((Ad + Bd + ci) % pow(2, N));
-	Expression co((Ad + Bd + ci) / pow(2, N));
+	Expression s((Expression(Ad) + Bd + ci) % pow(2, N));
+	Expression co((Expression(Ad) + Bd + ci) / pow(2, N));
 
-	int case0 = func.pushCond(~Ac & ~Bc);
+	int case0 = func.pushCond(~Expression(Ac) & ~Bc);
 	func.conds[case0].req(Sd, s);
 	func.conds[case0].req(Sc, Operand::intOf(0));
 	func.conds[case0].mem(ci, co);
 	func.conds[case0].ack({Ac, Ad, Bc, Bd});
 
-	int case1 = func.pushCond(Ac & ~Bc);
+	int case1 = func.pushCond(Expression(Ac) & ~Bc);
 	func.conds[case1].req(Sd, s);
 	func.conds[case1].req(Sc, Operand::intOf(0));
 	func.conds[case1].mem(ci, co);
 	func.conds[case1].ack({Bc, Bd});
 
-	int case2 = func.pushCond(~Ac & Bc);
+	int case2 = func.pushCond(~Expression(Ac) & Bc);
 	func.conds[case2].req(Sd, s);
 	func.conds[case2].req(Sc, Operand::intOf(0));
 	func.conds[case2].mem(ci, co);
 	func.conds[case2].ack({Ac, Ad});
 
-	int case3 = func.pushCond(Ac & Bc & (co != ci));
+	int case3 = func.pushCond(Expression(Ac) & Bc & (co != ci));
 	func.conds[case3].req(Sd, s);
 	func.conds[case3].req(Sc, Operand::intOf(0));
 	func.conds[case3].mem(ci, co);
 
-	int case4 = func.pushCond(Ac & Bc & (co == ci));
+	int case4 = func.pushCond(Expression(Ac) & Bc & (co == ci));
 	func.conds[case4].req(Sd, s);
 	func.conds[case4].req(Sc, Operand::intOf(1));
 	func.conds[case4].mem(ci, Operand::intOf(0));

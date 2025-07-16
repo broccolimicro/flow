@@ -2,6 +2,7 @@
 
 #include <common/mapping.h>
 #include <interpret_arithmetic/export_verilog.h>
+#include <arithmetic/algorithm.h>
 
 namespace flow {
 
@@ -67,7 +68,7 @@ clocked::Module synthesize_valrdy(const Func &func) {
 			if (i >= (int)condToValRdy.size()) {
 				condToValRdy.resize(i+1, Expression());
 			}
-			condToValRdy[i] = result.chans[i].getValid() & result.chans[i].getReady();
+			condToValRdy[i] = Expression(result.chans[i].getValid()) & result.chans[i].getReady();
 		} else if (func.nets[i].purpose == flow::Net::IN or func.nets[i].purpose == flow::Net::REG) {
 			inregToData.set(i, result.chans[i].data);
 		} else if (func.nets[i].purpose == flow::Net::OUT) {
@@ -81,14 +82,14 @@ clocked::Module synthesize_valrdy(const Func &func) {
 			ready = ready & Operand::varOf(result.chans[j->first].ready);
 		}
 		ready = ~result.chans[i->uid].getValid() | ready;
-		ready.minimize();
+		ready.top = arithmetic::minimize(ready, {ready.top}).map(ready.top);
 		result.assign.push_back(
 			clocked::Assign(result.chans[i->uid].ready, ready, true));
 
 		Expression valid = i->valid;
 		valid.apply(inregToData);
 		valid = isValid(valid);
-		valid.minimize();
+		valid.top = arithmetic::minimize(valid, {valid.top}).map(valid.top);
 
 		vector<clocked::Assign> assign;
 		vector<clocked::Assign> reset;
@@ -122,7 +123,7 @@ clocked::Module synthesize_valrdy(const Func &func) {
 					}
 				}
 			}
-			valid.minimize();
+			valid.top = arithmetic::minimize(valid, {valid.top}).map(valid.top);
 
 			result.assign.push_back(
 				clocked::Assign(result.chans[i].valid, valid, true));
@@ -139,7 +140,7 @@ clocked::Module synthesize_valrdy(const Func &func) {
 			}
 			Expression ready_out = nvalid | ready;
 			cout << ready_out << endl;
-			ready_out.minimize();
+			ready_out.top = arithmetic::minimize(ready_out, {ready_out.top}).map(ready_out.top);
 			cout << ready_out << endl;
 
 			result.assign.push_back(
