@@ -58,31 +58,34 @@ struct ValRdy {
 	Operand getData();
 };
 
-struct Assign {
-	Assign();
-	Assign(int net, Expression expr, bool blocking=false);
-	~Assign();
+struct Statement {
+	// Assignment
+	Statement(int net, Expression expr, bool blocking=false);
+
+	// If/Else
+	Statement(Expression expr=Expression::boolOf(true), vector<Statement> stmts=vector<Statement>());
+	~Statment();
+
+	enum {
+		ASSIGN = 0,
+		BLOCK = 1
+	};
+
+	int type;
 
 	int net;
-	Expression expr;
 	bool blocking;
+	
+	Expression expr;
+	vector<Statement> sub;
 };
 
-struct Rule {
-	Rule(vector<Assign> assign=vector<Assign>(), Expression guard=Operand(true));
-	~Rule();
-
-	Expression guard;
-	vector<Assign> assign;
-};
-
-struct Block {
-	Block(Expression clk=Operand(true), vector<Rule> rules=vector<Rule>());
-	~Block();
+struct Trigger {
+	Trigger(Expression clk=Operand(true), vector<Statement> stmts=vector<Statement>());
+	~Trigger();
 
 	Expression clk;
-	vector<Assign> reset;
-	vector<Rule> rules;
+	vector<Statement> stmts;
 };
 
 struct Module {
@@ -92,8 +95,8 @@ struct Module {
 	int reset;
 	int clk;
 
-	vector<Assign> assign;
-	vector<Block> blocks;
+	vector<Statement> stmts;
+	vector<Trigger> triggers;
 
 	int netIndex(string) const;
 	int netIndex(string, bool define=false);
