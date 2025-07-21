@@ -3,9 +3,9 @@
 #include <common/net.h>
 #include <arithmetic/expression.h>
 
-#include <vector>
-#include <string>
 #include <stdio.h>
+#include <string>
+#include <vector>
 
 using namespace std;
 using arithmetic::Expression;
@@ -75,10 +75,12 @@ struct Condition {
 	void ack(Operand in);
 	void ack(vector<Operand> in);
 
-	auto operator<=>(const Condition &cond) const;
+	auto operator<=>(const Condition &cond);
 	friend std::ostream& operator<<(std::ostream& os, const Condition& cond);
 };
 
+bool operator==(const Condition &c1, const Condition &c2);
+bool operator!=(const Condition &c1, const Condition &c2);
 
 
 struct Input {
@@ -110,5 +112,9 @@ struct Func {
 
 	Operand pushNet(string name, Type type=Type(Type::BITS, 1), int purpose=Net::NONE);
 	int pushCond(Expression valid);
+	friend std::ostream& operator<<(std::ostream& os, const Func& f);
 };
+
+bool operator==(const Func &f1, const Func &f2);
+bool operator!=(const Func &f1, const Func &f2);
 }
