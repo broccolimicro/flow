@@ -1,8 +1,8 @@
 #include "synthesize.h"
 
+#include <arithmetic/algorithm.h>
 #include <common/mapping.h>
 #include <interpret_arithmetic/export_verilog.h>
-#include <arithmetic/algorithm.h>
 
 namespace flow {
 
@@ -18,167 +18,134 @@ clocked::Type synthesize_type(const Type &type) {
 	return result;
 }
 
+
 void synthesize_chan(clocked::Module &mod, const Net &net) {
 	static const clocked::Type wire(clocked::Type::BITS, 1);
 	clocked::ValRdy result;
+	clocked::Block &always = mod.blocks.back();
+
 	if (net.purpose == flow::Net::IN) {
 		result.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::IN);
 		result.ready = mod.pushNet(net.name+"_ready", wire, clocked::Net::OUT);
 		result.data = mod.pushNet(net.name+"_data", synthesize_type(net.type), clocked::Net::IN);
+
 	} else if (net.purpose == flow::Net::OUT) {
-		result.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::OUT);
+		int valid_wire = mod.pushNet(net.name+"_valid", wire, clocked::Net::OUT);
+		int valid_reg = mod.pushNet(net.name+"_valid_reg", clocked::Type(1, 1), clocked::Net::REG);
+		result.valid = valid_reg;
+		mod.assign.push_back(clocked::Assign(valid_wire, Expression::varOf(valid_reg), true));
+		always.reset.push_back(clocked::Assign(result.valid, Expression::intOf(0)));
+
 		result.ready = mod.pushNet(net.name+"_ready", wire, clocked::Net::IN);
+		clocked::Rule reset_valid_reg({
+				clocked::Assign(result.valid, Expression::intOf(0)),
+		}, Expression::varOf(result.ready));
+		always._else.push_back(reset_valid_reg);
+
 		int data = mod.pushNet(net.name+"_data", synthesize_type(net.type), clocked::Net::OUT);
 		result.data = mod.pushNet(net.name+"_state", synthesize_type(net.type), clocked::Net::REG);
-		mod.assign.push_back(clocked::Assign(data, Operand::varOf(result.data)));
+		mod.assign.push_back(clocked::Assign(data, Expression::varOf(result.data), true));
+		always.reset.push_back(clocked::Assign(result.data, Expression::intOf(0)));
+
 	} else if (net.purpose == flow::Net::REG) {
 		result.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::WIRE);
 		result.ready = -1;
 		result.data = mod.pushNet(net.name+"_data", synthesize_type(net.type), clocked::Net::REG);
+
+	//TODO: migrate out of synthesize_chan(), into synthesize_valrdy(), if/when COND's are no longer detected in netlist?
 	} else if (net.purpose == flow::Net::COND) {
-		result.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::REG);
 		result.ready = mod.pushNet(net.name+"_ready", wire, clocked::Net::WIRE);
 		result.data = -1;
 	}
 	mod.chans.push_back(result);
 }
 
+
 clocked::Module synthesize_valrdy(const Func &func) {
 	clocked::Module result;
 	result.name = func.name;
 
-	result.reset = result.pushNet("reset", clocked::Type(clocked::Type::BITS, 1), clocked::Net::IN);
 	result.clk = result.pushNet("clk", clocked::Type(clocked::Type::BITS, 1), clocked::Net::IN);
+	result.reset = result.pushNet("reset", clocked::Type(clocked::Type::BITS, 1), clocked::Net::IN);
 
-	// create variables for each channel
-	for (int i = 0; i < (int)func.nets.size(); i++) {
-		synthesize_chan(result, func.nets[i]);
-	}
+	clocked::Block setupBlock(Expression::varOf(result.clk));
+	result.blocks.push_back(setupBlock);
+	clocked::Block &always = result.blocks.back();
 
-	// Create variable mappings
-	mapping condToValid;
-	mapping condToReady;
-	mapping inregToData;
-	mapping outToReady;
-	vector<Expression> condToValRdy;
-	for (int i = 0; i < (int)func.nets.size(); i++) {
-		if (func.nets[i].purpose == flow::Net::COND) {
-			condToValid.set(i, result.chans[i].valid);
-			condToReady.set(i, result.chans[i].ready);
-			if (i >= (int)condToValRdy.size()) {
-				condToValRdy.resize(i+1, Expression());
-			}
-			condToValRdy[i] = Expression(result.chans[i].getValid()) & result.chans[i].getReady();
-		} else if (func.nets[i].purpose == flow::Net::IN or func.nets[i].purpose == flow::Net::REG) {
-			inregToData.set(i, result.chans[i].data);
-		} else if (func.nets[i].purpose == flow::Net::OUT) {
-			outToReady.set(i, result.chans[i].ready);
+	// Create channels for each variable
+	mapping funcNetToChannelData;
+	for (int netIdx = 0; netIdx < (int)func.nets.size(); netIdx++) {
+		synthesize_chan(result, func.nets[netIdx]);
+
+		// Map flow::Func nets to channel-bound clocked::Nets
+		if (func.nets[netIdx].purpose == flow::Net::IN or func.nets[netIdx].purpose == flow::Net::REG) {
+			funcNetToChannelData.set(netIdx, result.chans[netIdx].data);
 		}
 	}
 
-	for (auto i = func.conds.begin(); i != func.conds.end(); i++) {
-		Expression ready = Operand(true);
-		for (auto j = i->outs.begin(); j != i->outs.end(); j++) {
-			ready = ready & Operand::varOf(result.chans[j->first].ready);
+	// Track branch selection for conditional execution
+	int branch_id_net = result.pushNet("branch_id", clocked::Type(1, 1), clocked::Net::REG);
+	always.reset.push_back(clocked::Assign(branch_id_net, Expression::intOf(0)));
+
+	int branch_id = 0;
+	for (auto condIdx = func.conds.begin(); condIdx != func.conds.end(); ++condIdx) {
+		clocked::Rule branch_rule;
+		branch_rule.assign.push_back(clocked::Assign(branch_id_net, Expression::intOf(branch_id)));
+
+		Expression valid = condIdx->valid;
+		//valid = isValid(valid);
+		//valid.top = minimize(valid, {valid.top}).map(valid.top);
+		valid.apply(funcNetToChannelData);
+
+		// Assemble branch_ready expression
+		Expression branch_ready = Expression::boolOf(true);
+		for (auto condInputIdx = condIdx->ins.begin(); condInputIdx != condIdx->ins.end(); condInputIdx++) {
+			branch_ready = branch_ready & Expression::varOf(result.chans[*condInputIdx].valid); 
 		}
-		ready = ~result.chans[i->uid].getValid() | ready;
-		ready.top = arithmetic::minimize(ready, {ready.top}).map(ready.top);
-		result.assign.push_back(
-			clocked::Assign(result.chans[i->uid].ready, ready, true));
+		for (auto condOutputIdx = condIdx->outs.begin(); condOutputIdx != condIdx->outs.end(); condOutputIdx++) {
+			branch_ready = branch_ready & (~Expression::varOf(result.chans[condOutputIdx->first].valid) | Expression::varOf(result.chans[condOutputIdx->first].ready));
 
-		Expression valid = i->valid;
-		valid.apply(inregToData);
-		valid = isValid(valid);
-		valid.top = arithmetic::minimize(valid, {valid.top}).map(valid.top);
+			Expression request = condOutputIdx->second;
+			//request.top = minimize(request, {request.top}).map(request.top);
+			//request = isValid(request);  //request.isValid()
+			request.apply(funcNetToChannelData);
 
-		vector<clocked::Assign> assign;
-		vector<clocked::Assign> reset;
-		for (auto j = i->outs.begin(); j != i->outs.end(); j++) {
-			Expression data = j->second;
-			data.apply(inregToData);
-			reset.push_back(clocked::Assign(result.chans[j->first].data, Operand::intOf(0)));
-			assign.push_back(clocked::Assign(result.chans[j->first].data, data));
+			branch_rule.assign.push_back(clocked::Assign(result.chans[condOutputIdx->first].data, request));
+			branch_rule.assign.push_back(clocked::Assign(result.chans[condOutputIdx->first].valid, Expression::intOf(1)));
 		}
-		reset.push_back(clocked::Assign(result.chans[i->uid].valid, Operand(false)));
-		assign.push_back(clocked::Assign(result.chans[i->uid].valid, Operand(true)));
+		//branch_ready.top = minimize(branch_ready, {branch_ready.top}).map(branch_ready.top);
 
-		result.blocks.push_back(
-			clocked::Block(Operand::varOf(result.clk), {
-				clocked::Rule(assign,
-					valid & result.chans[i->uid].getReady()),
-				clocked::Rule({
-					clocked::Assign(result.chans[i->uid].valid, Operand(false))
-				}, result.chans[i->uid].getReady()),
-			}));
-		result.blocks.back().reset = reset;
+		branch_rule.guard = arithmetic::ident(valid) & branch_ready;
+		always.rules.push_back(branch_rule);
+
+		Expression branch_selector = arithmetic::ident(Expression::varOf(branch_id_net) == Expression::intOf(branch_id));
+		//branch_selector.top = minimize(branch_selector, {branch_selector.top}).map(branch_selector.top);
+		result.assign.push_back(clocked::Assign(result.chans[condIdx->uid].ready, branch_selector & branch_ready, true));
+
+		branch_id++;
 	}
 
-	for (int i = 0; i < (int)func.nets.size(); i++) {
-		if (func.nets[i].purpose == flow::Net::OUT) {
-			Expression valid = Operand(false);
-			for (auto j = func.conds.begin(); j != func.conds.end(); j++) {
-				for (auto k = j->outs.begin(); k != j->outs.end(); k++) {
-					if (k->first == i) {
-						valid = valid | Operand::varOf(result.chans[j->uid].valid);
+	// Return ready signals on each channel
+	for (int netIdx = 0; netIdx < (int)func.nets.size(); netIdx++) {
+		if (func.nets[netIdx].purpose == flow::Net::IN) {
+
+			//Expression chan_nvalid = Expression::boolOf(true);
+			Expression chan_ready = Expression::boolOf(false);
+			for (auto condIdx = func.conds.begin(); condIdx != func.conds.end(); condIdx++) {
+				for (auto condInputIdx = condIdx->ins.begin(); condInputIdx != condIdx->ins.end(); condInputIdx++) {
+					if (*condInputIdx == netIdx) {
+						//chan_nvalid = chan_nvalid & ~Expression::varOf(result.chans[condIdx->uid].valid);
+						chan_ready = chan_ready | Expression::varOf(result.chans[condIdx->uid].ready);
 					}
 				}
 			}
-			valid.top = arithmetic::minimize(valid, {valid.top}).map(valid.top);
 
-			result.assign.push_back(
-				clocked::Assign(result.chans[i].valid, valid, true));
-		} else if (func.nets[i].purpose == flow::Net::IN) {
-			Expression ready = Operand(false);
-			Expression nvalid = Operand(true);
-			for (auto j = func.conds.begin(); j != func.conds.end(); j++) {
-				for (auto k = j->ins.begin(); k != j->ins.end(); k++) {
-					if (*k == i) {
-						nvalid = nvalid & ~Operand::varOf(result.chans[j->uid].valid);
-						ready = ready | Operand::varOf(result.chans[j->uid].ready);
-					}
-				}
-			}
-			Expression ready_out = nvalid | ready;
-			cout << ready_out << endl;
-			ready_out.top = arithmetic::minimize(ready_out, {ready_out.top}).map(ready_out.top);
-			cout << ready_out << endl;
-
-			result.assign.push_back(
-				clocked::Assign(result.chans[i].ready, ready_out, true));
+			Expression chan_ready_out = chan_ready; //chan_nvalid | chan_ready;
+			//chan_ready_out.canonicalize();
+			//chan_ready_out.top = minimize(chan_ready_out, {chan_ready_out.top}).map(chan_ready_out.top);
+			result.assign.push_back(clocked::Assign(result.chans[netIdx].ready, chan_ready_out, true));
 		}
 	}
-
-	/*for (int i = 0; i < (int)from.size(); i++) {
-		string port = vars.nodes[from[i].index].to_string();
-		expression ready = from[i].token;
-		for (int i = 0; i < (int)cond.size(); i++) {
-			// TODO(edward.bingham) need cond[i].ready
-			ready.replace(cond[i].index, cond[i].ready);
-		}
-
-		fprintf(fptr, "\tassign %s_ready = %s;\n", port.c_str(), export_expression(~from[i].token | ready, vars).to_string().c_str());
-	}
-
-	arithmetic::expression ready = true;
-	for (int i = 0; i < (int)to.size(); i++) {
-		string port = vars.nodes[to[i].index].to_string();
-
-		printf("\talways @(posedge clk) begin\n");
-		printf("\t\tif (reset) begin\n");
-		printf("\t\t\t%s_send <= 0;\n", port.c_str());
-		printf("\t\t\t%s_state <= 0;\n", port.c_str());
-		printf("\t\tend else if (!%s_valid || %s_ready) begin\n", port.c_str(), port.c_str());
-		printf("\t\t\tif (%s) begin\n", export_expression(is_valid(to[i].token), vars).to_string().c_str());
-		printf("\t\t\t\t%s_state <= %s;\n", port.c_str(), export_expression(to[i].value, vars).to_string().c_str());
-		printf("\t\t\t\t%s_send <= 1;\n", port.c_str());
-		printf("\t\t\tend else begin\n");
-		printf("\t\t\t\t%s_send <= 0;\n", port.c_str());
-		printf("\t\t\tend\n");
-		printf("\t\tend\n");
-		printf("\tend\n\n");
-	}
-
-	fprintf(fptr, "endmodule\n");*/
 
 	return result;
 }

@@ -74,6 +74,7 @@ struct Rule {
 
 	Expression guard;
 	vector<Assign> assign;
+	bool isChained = false; // True for chained else-if sequences & false for parallel ifs
 };
 
 struct Block {
@@ -83,6 +84,7 @@ struct Block {
 	Expression clk;
 	vector<Assign> reset;
 	vector<Rule> rules;
+	vector<Rule> _else;  //TODO: support proper nesting, even if trailing branch is sufficient for our templates
 };
 
 struct Module {

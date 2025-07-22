@@ -232,7 +232,7 @@ int Func::pushCond(Expression valid) {
 	int uid = (int)nets.size();
 	int index = (int)conds.size();
 	conds.push_back(Condition(uid, valid));
-	nets.push_back(Net("case_" + ::to_string(index), Type(Type::BITS, 1), Net::COND));
+	nets.push_back(Net("branch_" + ::to_string(index), Type(Type::BITS, 1), Net::COND));
 	return index;
 }
 
