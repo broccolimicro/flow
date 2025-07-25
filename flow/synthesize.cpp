@@ -2,6 +2,7 @@
 
 #include <arithmetic/algorithm.h>
 #include <common/mapping.h>
+#include <common/math.h>
 #include <interpret_arithmetic/export_verilog.h>
 
 namespace flow {
@@ -84,8 +85,9 @@ clocked::Module synthesize_valrdy(const Func &func) {
 	}
 
 	// Track branch selection for conditional execution
-	int branch_id_net = result.pushNet("branch_id", clocked::Type(1, 1), clocked::Net::REG);
-	always.reset.push_back(clocked::Assign(branch_id_net, Expression::intOf(0)));
+	int branch_id_width = log2i(func.conds.size());
+	int branch_id_reg = result.pushNet("branch_id", clocked::Type(1, branch_id_width), clocked::Net::REG);
+	always.reset.push_back(clocked::Assign(branch_id_reg, Expression::intOf(0)));
 
 	int branch_id = 0;
 	for (auto condIdx = func.conds.begin(); condIdx != func.conds.end(); ++condIdx) {
