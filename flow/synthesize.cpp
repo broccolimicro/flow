@@ -53,9 +53,10 @@ void synthesize_chan(clocked::Module &mod, const Net &net) {
 						~Expression::varOf(result.valid) | Expression::varOf(result.ready)), true));
 
 	} else if (net.purpose == flow::Net::REG) {
-		result.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::WIRE);
-		result.ready = -1;
+		result.valid = -1;  //mod.pushNet(net.name+"_valid", wire, clocked::Net::WIRE);
+		result.ready = -1;  //TODO: these could be wires for debug or mere modelling in cocotb harness
 		result.data = mod.pushNet(net.name+"_data", synthesize_type(net.type), clocked::Net::REG);
+		always.reset.push_back(clocked::Assign(result.data, Expression::intOf(0)));
 
 	//TODO: migrate out of synthesize_chan(), into synthesize_valrdy(), if/when COND's are no longer detected in netlist?
 	} else if (net.purpose == flow::Net::COND) {
@@ -94,39 +95,50 @@ clocked::Module synthesize_valrdy(const Func &func) {
 	always.reset.push_back(clocked::Assign(branch_id_reg, Expression::intOf(0)));
 
 	int branch_id = 0;
-	for (auto condIdx = func.conds.begin(); condIdx != func.conds.end(); ++condIdx) {
+	for (auto condIt = func.conds.begin(); condIt != func.conds.end(); ++condIt) {
 		clocked::Rule branch_rule;
-		branch_rule.assign.push_back(clocked::Assign(branch_id_net, Expression::intOf(branch_id)));
+		branch_rule.assign.push_back(clocked::Assign(branch_id_reg, Expression::intOf(branch_id)));
 
-		Expression valid = condIdx->valid;
+		Expression valid = condIt->valid;
+		//valid.minimize();
 		//valid = isValid(valid);
-		//valid.top = minimize(valid, {valid.top}).map(valid.top);
 		valid.apply(funcNetToChannelData);
 
 		// Assemble branch_ready expression
 		Expression branch_ready = Expression::boolOf(true);
-		for (auto condInputIdx = condIdx->ins.begin(); condInputIdx != condIdx->ins.end(); condInputIdx++) {
-			branch_ready = branch_ready & Expression::varOf(result.chans[*condInputIdx].valid); 
+		for (auto condInputIt = condIt->ins.begin(); condInputIt != condIt->ins.end(); condInputIt++) {
+			branch_ready = branch_ready & Expression::varOf(result.chans[*condInputIt].valid); 
 		}
-		for (auto condOutputIdx = condIdx->outs.begin(); condOutputIdx != condIdx->outs.end(); condOutputIdx++) {
-			branch_ready = branch_ready & (~Expression::varOf(result.chans[condOutputIdx->first].valid) | Expression::varOf(result.chans[condOutputIdx->first].ready));
+		for (auto condOutputIt = condIt->outs.begin(); condOutputIt != condIt->outs.end(); condOutputIt++) {
+			branch_ready = branch_ready & (
+					~Expression::varOf(result.chans[condOutputIt->first].valid)
+					| Expression::varOf(result.chans[condOutputIt->first].ready));
 
-			Expression request = condOutputIdx->second;
-			//request.top = minimize(request, {request.top}).map(request.top);
+			Expression request = condOutputIt->second;
+			//request.minimize();
 			//request = isValid(request);  //request.isValid()
 			request.apply(funcNetToChannelData);
 
-			branch_rule.assign.push_back(clocked::Assign(result.chans[condOutputIdx->first].data, request));
-			branch_rule.assign.push_back(clocked::Assign(result.chans[condOutputIdx->first].valid, Expression::intOf(1)));
+			branch_rule.assign.push_back(clocked::Assign(result.chans[condOutputIt->first].data, request));
+			branch_rule.assign.push_back(clocked::Assign(result.chans[condOutputIt->first].valid, Expression::intOf(1)));
 		}
-		//branch_ready.top = minimize(branch_ready, {branch_ready.top}).map(branch_ready.top);
+
+		// Route internal-memory registers
+		for (auto condRegIt = condIt->regs.begin(); condRegIt != condIt->regs.end(); condRegIt++) {
+			Expression internalRegAssignment(condRegIt->second);
+			internalRegAssignment.apply(funcNetToChannelData);
+			//internalRegAssignment.minimize();
+
+			branch_rule.assign.push_back(clocked::Assign(result.chans[condRegIt->first].data, internalRegAssignment));
+		}
 
 		branch_rule.guard = arithmetic::ident(valid) & branch_ready;
 		always.rules.push_back(branch_rule);
 
-		Expression branch_selector = arithmetic::ident(Expression::varOf(branch_id_net) == Expression::intOf(branch_id));
-		//branch_selector.top = minimize(branch_selector, {branch_selector.top}).map(branch_selector.top);
-		result.assign.push_back(clocked::Assign(result.chans[condIdx->uid].ready, branch_selector & branch_ready, true));
+		Expression branch_selector = arithmetic::ident(Expression::varOf(branch_id_reg) == Expression::intOf(branch_id));
+		branch_ready = branch_selector & branch_ready;
+		//branch_ready.minimize();
+		result.assign.push_back(clocked::Assign(result.chans[condIt->uid].ready, branch_ready, true));
 
 		branch_id++;
 	}
@@ -137,18 +149,17 @@ clocked::Module synthesize_valrdy(const Func &func) {
 
 			//Expression chan_nvalid = Expression::boolOf(true);
 			Expression chan_ready = Expression::boolOf(false);
-			for (auto condIdx = func.conds.begin(); condIdx != func.conds.end(); condIdx++) {
-				for (auto condInputIdx = condIdx->ins.begin(); condInputIdx != condIdx->ins.end(); condInputIdx++) {
-					if (*condInputIdx == netIdx) {
-						//chan_nvalid = chan_nvalid & ~Expression::varOf(result.chans[condIdx->uid].valid);
-						chan_ready = chan_ready | Expression::varOf(result.chans[condIdx->uid].ready);
+			for (auto condIt = func.conds.begin(); condIt != func.conds.end(); condIt++) {
+				for (auto condInputIt = condIt->ins.begin(); condInputIt != condIt->ins.end(); condInputIt++) {
+					if (*condInputIt == netIdx) {
+						//chan_nvalid = chan_nvalid & ~Expression::varOf(result.chans[condIt->uid].valid);
+						chan_ready = chan_ready | Expression::varOf(result.chans[condIt->uid].ready);
 					}
 				}
 			}
 
 			Expression chan_ready_out = chan_ready; //chan_nvalid | chan_ready;
-			//chan_ready_out.canonicalize();
-			//chan_ready_out.top = minimize(chan_ready_out, {chan_ready_out.top}).map(chan_ready_out.top);
+			//chan_ready_out.minimize();
 			result.assign.push_back(clocked::Assign(result.chans[netIdx].ready, chan_ready_out, true));
 		}
 	}
