@@ -48,6 +48,10 @@ void synthesize_chan(clocked::Module &mod, const Net &net) {
 		mod.assign.push_back(clocked::Assign(data, Expression::varOf(result.data), true));
 		always.reset.push_back(clocked::Assign(result.data, Expression::intOf(0)));
 
+		int debug_wire = mod.pushNet("__"+net.name+"_ok", wire, clocked::Net::WIRE);
+		mod.assign.push_back(clocked::Assign(debug_wire, arithmetic::ident(
+						~Expression::varOf(result.valid) | Expression::varOf(result.ready)), true));
+
 	} else if (net.purpose == flow::Net::REG) {
 		result.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::WIRE);
 		result.ready = -1;
