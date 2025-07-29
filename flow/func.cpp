@@ -1,21 +1,18 @@
-#include "func.h"
-
-#include <parse_expression/expression.h>
-#include <arithmetic/expression.h>
-#include <interpret_arithmetic/export.h>
-
 #include <stdexcept>
 #include <compare>
 
+#include <arithmetic/expression.h>
+#include <interpret_arithmetic/export.h>
+#include <parse_expression/expression.h>
+
+#include "func.h"
+
+using arithmetic::Expression;
+using arithmetic::Operand;
+
 namespace flow {
 
-Type::Type() {
-	type = FIXED;
-	width = 16;
-	shift = 0;
-}
-
-Type::Type(int type, int width, int shift) {
+Type::Type(TypeName type, int width, int shift) {
 	this->type = type;
 	this->width = width;
 	this->shift = shift;
@@ -30,17 +27,19 @@ std::ostream& operator<<(std::ostream& os, const Type& type) {
               << ", shift = " << type.shift << ")";
 }
 
-Net::Net() {
-	purpose = NONE;
-}
-
-Net::Net(string name, Type type, int purpose) {
+Net::Net(string name, Type type, Purpose purpose) {
 	this->name = name;
 	this->type = type;
 	this->purpose = purpose;
 }
 
 Net::~Net() {
+}
+
+std::ostream& operator<<(std::ostream& os, const Net& net) {
+    return os << "(name = " << net.name
+              << ", type = " << net.type
+              << ", purpose = " << net.purpose << ")";
 }
 
 Condition::Condition() {
@@ -222,7 +221,7 @@ int Func::netCount() const {
 	return (int)nets.size();
 }
 
-Operand Func::pushNet(string name, flow::Type type, int purpose) {
+Operand Func::pushNet(string name, Type type, Net::Purpose purpose) {
 	int uid = (int)nets.size();
 	nets.push_back(Net(name, type, purpose));
 	return Operand::varOf(uid);
@@ -232,99 +231,99 @@ int Func::pushCond(Expression valid) {
 	int uid = (int)nets.size();
 	int index = (int)conds.size();
 	conds.push_back(Condition(uid, valid));
-	nets.push_back(Net("branch_" + ::to_string(index), Type(Type::BITS, 1), Net::COND));
+	nets.push_back(Net("branch_" + ::to_string(index), Type(Type::TypeName::BITS, 1), Net::Purpose::COND));
 	return index;
 }
 
 std::ostream& operator<<(std::ostream& os, const Func& func) {
-    os << "Func: " << func.name << "\n";
+	os << "Func: " << func.name << "\n";
 
-    // Output nets
-    os << "  Nets (" << func.nets.size() << "):\n";
-    for (size_t i = 0; i < func.nets.size(); ++i) {
-        const auto& net = func.nets[i];
-        const char* purpose = "UNKNOWN";
-        switch (net.purpose) {
-            case Net::NONE: purpose = "NONE"; break;
-            case Net::IN: purpose = "IN"; break;
-            case Net::OUT: purpose = "OUT"; break;
-            case Net::REG: purpose = "REG"; break;
-            case Net::COND: purpose = "COND"; break;
-        }
-        os << "    [" << i << "] " << net.name
-           << " (type: " << net.type
-           << ", purpose: " << purpose << ")\n";
-    }
+	// Output nets
+	os << "  Nets (" << func.nets.size() << "):\n";
+	for (size_t i = 0; i < func.nets.size(); ++i) {
+		const auto& net = func.nets[i];
+		const char* purpose = "UNKNOWN";
+		switch (net.purpose) {
+			case Net::Purpose::NONE: purpose = "NONE"; break;
+			case Net::Purpose::IN: purpose = "IN"; break;
+			case Net::Purpose::OUT: purpose = "OUT"; break;
+			case Net::Purpose::REG: purpose = "REG"; break;
+			case Net::Purpose::COND: purpose = "COND"; break;
+		}
+		os << "    [" << i << "] " << net.name
+			<< " (type: " << net.type
+			<< ", purpose: " << purpose << ")\n";
+	}
 
-    // Output conditions
-    os << "  Conditions (" << func.conds.size() << "):\n";
-    for (size_t i = 0; i < func.conds.size(); ++i) {
-        const auto& cond = func.conds[i];
-        os << "    Condition " << i << " (uid: " << cond.uid << "):\n";
-        os << "      Valid: " << cond.valid << "\n";
+	// Output conditions
+	os << "  Conditions (" << func.conds.size() << "):\n";
+	for (size_t i = 0; i < func.conds.size(); ++i) {
+		const auto& cond = func.conds[i];
+		os << "    Condition " << i << " (uid: " << cond.uid << "):\n";
+		os << "      Valid: " << cond.valid << "\n";
 
-        // Output outputs
-        if (!cond.outs.empty()) {
-            os << "      Outputs:\n";
-            for (const auto& out : cond.outs) {
-                os << "        [" << out.first << "] = " << out.second << "\n";
-            }
-        }
+		// Output outputs
+		if (!cond.outs.empty()) {
+			os << "      Outputs:\n";
+			for (const auto& out : cond.outs) {
+				os << "        [" << out.first << "] = " << out.second << "\n";
+			}
+		}
 
-        // Output registers
-        if (!cond.regs.empty()) {
-            os << "      Registers:\n";
-            for (const auto& reg : cond.regs) {
-                os << "        [" << reg.first << "] = " << reg.second << "\n";
-            }
-        }
+		// Output registers
+		if (!cond.regs.empty()) {
+			os << "      Registers:\n";
+			for (const auto& reg : cond.regs) {
+				os << "        [" << reg.first << "] = " << reg.second << "\n";
+			}
+		}
 
-        // Output inputs
-        if (!cond.ins.empty()) {
-            os << "      Inputs: ";
-            for (size_t j = 0; j < cond.ins.size(); ++j) {
-                if (j > 0) os << ", ";
-                os << cond.ins[j];
-            }
-            os << "\n";
-        }
-    }
+		// Output inputs
+		if (!cond.ins.empty()) {
+			os << "      Inputs: ";
+			for (size_t j = 0; j < cond.ins.size(); ++j) {
+				if (j > 0) os << ", ";
+				os << cond.ins[j];
+			}
+			os << "\n";
+		}
+	}
 
-    return os;
+	return os;
 }
 
 bool operator==(const Func &f1, const Func &f2) {
-    // Compare simple members
-    if (f1.name != f2.name ||
-        f1.nets.size() != f2.nets.size() ||
-        f1.conds.size() != f2.conds.size()) {
-        return false;
-    }
+	// Compare simple members
+	if (f1.name != f2.name ||
+			f1.nets.size() != f2.nets.size() ||
+			f1.conds.size() != f2.conds.size()) {
+		return false;
+	}
 
-    // Compare nets vector
-    for (size_t i = 0; i < f1.nets.size(); ++i) {
-        const auto& net1 = f1.nets[i];
-        const auto& net2 = f2.nets[i];
+	// Compare nets vector
+	for (size_t i = 0; i < f1.nets.size(); ++i) {
+		const auto& net1 = f1.nets[i];
+		const auto& net2 = f2.nets[i];
 
-        if (net1.name != net2.name ||
-            net1.type != net2.type ||
-            net1.purpose != net2.purpose) {
-            return false;
-        }
-    }
+		if (net1.name != net2.name ||
+				net1.type != net2.type ||
+				net1.purpose != net2.purpose) {
+			return false;
+		}
+	}
 
-    // Compare conditions vector
-    for (size_t i = 0; i < f1.conds.size(); ++i) {
-        if (!(f1.conds[i] == f2.conds[i])) {
-            return false;
-        }
-    }
+	// Compare conditions vector
+	for (size_t i = 0; i < f1.conds.size(); ++i) {
+		if (!(f1.conds[i] == f2.conds[i])) {
+			return false;
+		}
+	}
 
-    return true;
+	return true;
 }
 
 bool operator!=(const Func &f1, const Func &f2) {
-    return !(f1 == f2);
+	return !(f1 == f2);
 }
 
 }

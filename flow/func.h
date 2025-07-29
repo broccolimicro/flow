@@ -14,16 +14,15 @@ using arithmetic::Operand;
 namespace flow {
 
 struct Type {
-	Type();
-	Type(int type, int width, int shift=0);
-	~Type();
-
-	enum {
+	enum TypeName : int {
 		BITS = 0,
 		FIXED = 1
 	};
 
-	int type;
+	Type(TypeName type=TypeName::FIXED, int width=1, int shift=0);
+	~Type();
+
+	TypeName type;
 	int width;
 	int shift;
 
@@ -33,11 +32,7 @@ struct Type {
 
 
 struct Net {
-	Net();
-	Net(string name, Type type=Type(Type::BITS, 1), int purpose=NONE);
-	~Net();
-
-	enum {
+	enum Purpose {
 		NONE = 0,
 		IN = 1,
 		OUT = 2,
@@ -45,9 +40,16 @@ struct Net {
 		COND = 4,
 	};
 
+	Net(string name="", Type type=Type(Type::TypeName::BITS, 1), Purpose purpose=NONE);
+	~Net();
+
+
 	string name;
 	Type type;
-	int purpose;
+	Purpose purpose;
+
+	auto operator<=>(const Net &n) const = default;
+	friend std::ostream& operator<<(std::ostream& os, const Type& t);
 };
 
 struct Condition {
@@ -110,7 +112,7 @@ struct Func {
 	string netAt(int uid) const;
 	int netCount() const;
 
-	Operand pushNet(string name, Type type=Type(Type::BITS, 1), int purpose=Net::NONE);
+	Operand pushNet(string name, Type type=Type(Type::TypeName::BITS, 1), Net::Purpose purpose=Net::Purpose::NONE);
 	int pushCond(Expression valid);
 	friend std::ostream& operator<<(std::ostream& os, const Func& f);
 };
