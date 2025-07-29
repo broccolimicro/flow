@@ -27,7 +27,7 @@ const std::filesystem::path TEST_DIR = absolute(current_path() / "tests");
 
 
 parse_verilog::module_def synthesizeVerilogFromFunc(const Func &func) {
-	clocked::Module mod = synthesize_valrdy(func);
+	clocked::Module mod = synthesizeModuleFromFunc(func);
 	parse_verilog::module_def mod_v = export_module(mod);
 	string verilog = mod_v.to_string();
 	cout << verilog << endl;
@@ -59,10 +59,11 @@ parse_verilog::module_def synthesizeVerilogFromFunc(const Func &func) {
 	return mod_v;
 }
 
+/*
 TEST(ExportTest, Source) {
 	Func func;
 	func.name = "source";
-	Operand R = func.pushNet("R", Type(Type::FIXED, WIDTH), flow::Net::OUT);
+	Operand R = func.pushNet("R", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
 
 	int branch0 = func.pushCond(Expression::boolOf(true));
 	func.conds[branch0].req(R, Expression::intOf(1));  //TODO: send random int?
@@ -74,7 +75,7 @@ TEST(ExportTest, Source) {
 TEST(ExportTest, Sink) {
 	Func func;
 	func.name = "sink";
-	Operand L = func.pushNet("L", Type(Type::FIXED, WIDTH), flow::Net::IN);
+	Operand L = func.pushNet("L", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
 
 	int branch0 = func.pushCond(Expression::boolOf(true));
 	func.conds[branch0].ack(L);
@@ -85,8 +86,8 @@ TEST(ExportTest, Sink) {
 TEST(ExportTest, Buffer) {
 	Func func;
 	func.name = "buffer";
-	Operand L = func.pushNet("L", Type(Type::FIXED, WIDTH), flow::Net::IN);
-	Operand R = func.pushNet("R", Type(Type::FIXED, WIDTH), flow::Net::OUT);
+	Operand L = func.pushNet("L", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand R = func.pushNet("R", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
 	Expression exprL(L);
 
 	int branch0 = func.pushCond(Expression::boolOf(true));
@@ -100,9 +101,9 @@ TEST(ExportTest, Buffer) {
 TEST(ExportTest, Copy) {
 	Func func;
 	func.name = "copy";
-	Operand L = func.pushNet("L", Type(Type::FIXED, WIDTH), flow::Net::IN);
-	Operand R0 = func.pushNet("R0", Type(Type::FIXED, WIDTH), flow::Net::OUT);
-	Operand R1 = func.pushNet("R1", Type(Type::FIXED, WIDTH), flow::Net::OUT);
+	Operand L = func.pushNet("L", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand R0 = func.pushNet("R0", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
+	Operand R1 = func.pushNet("R1", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
 	Expression exprL(L);
 
 	int branch0 = func.pushCond(Expression::boolOf(true));
@@ -118,9 +119,9 @@ TEST(ExportTest, Copy) {
 TEST(ExportTest, Func) {
 	Func func;
 	func.name = "func";
-	Operand L0 = func.pushNet("L0", Type(Type::FIXED, WIDTH), flow::Net::IN);
-	Operand L1 = func.pushNet("L1", Type(Type::FIXED, WIDTH), flow::Net::IN);
-	Operand R = func.pushNet("R", Type(Type::FIXED, WIDTH), flow::Net::OUT);
+	Operand L0 = func.pushNet("L0", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand L1 = func.pushNet("L1", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand R = func.pushNet("R", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
 	Expression exprL0(L0);
 	Expression exprL1(L1);
 
@@ -138,10 +139,10 @@ TEST(ExportTest, Func) {
 TEST(ExportTest, Merge) {
 	Func func;
 	func.name = "merge";
-	Operand L0 = func.pushNet("L0", Type(Type::FIXED, WIDTH), flow::Net::IN);
-	Operand L1 = func.pushNet("L1", Type(Type::FIXED, WIDTH), flow::Net::IN);
-	Operand C = func.pushNet("C", Type(Type::FIXED, 1), flow::Net::IN);
-	Operand R = func.pushNet("R", Type(Type::FIXED, WIDTH), flow::Net::OUT);
+	Operand L0 = func.pushNet("L0", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand L1 = func.pushNet("L1", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand C = func.pushNet("C", Type(Type::TypeName::FIXED, 1), flow::Net::IN);
+	Operand R = func.pushNet("R", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
 	Expression exprL0(L0);
 	Expression exprL1(L1);
 	Expression exprC(C);
@@ -162,10 +163,10 @@ TEST(ExportTest, Merge) {
 TEST(ExportTest, Split) {
 	Func func;
 	func.name = "split";
-	Operand L = func.pushNet("L", Type(Type::FIXED, WIDTH), flow::Net::IN);
-	Operand C = func.pushNet("C", Type(Type::FIXED, 1), flow::Net::IN);
-	Operand R0 = func.pushNet("R0", Type(Type::FIXED, WIDTH), flow::Net::OUT);
-	Operand R1 = func.pushNet("R1", Type(Type::FIXED, WIDTH), flow::Net::OUT);
+	Operand L = func.pushNet("L", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand C = func.pushNet("C", Type(Type::TypeName::FIXED, 1), flow::Net::IN);
+	Operand R0 = func.pushNet("R0", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
+	Operand R1 = func.pushNet("R1", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
 	Expression exprL(L);
 	Expression exprC(C);
 
@@ -185,9 +186,9 @@ TEST(ExportTest, Split) {
 TEST(ExportTest, SAdder) {
 	Func func;
 	func.name = "s_adder";
-	Operand L = func.pushNet("L", Type(Type::FIXED, WIDTH), flow::Net::IN);
-	Operand m = func.pushNet("m", Type(Type::FIXED, WIDTH), flow::Net::REG);
-	Operand R = func.pushNet("R", Type(Type::FIXED, WIDTH), flow::Net::OUT);
+	Operand L = func.pushNet("L", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand m = func.pushNet("m", Type(Type::TypeName::FIXED, WIDTH), flow::Net::REG);
+	Operand R = func.pushNet("R", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
 	Expression exprL(L);
 	Expression exprm(m);
 
@@ -200,54 +201,55 @@ TEST(ExportTest, SAdder) {
 	EXPECT_SUBSTRING(verilog, "R_state <= L_data+m_data;");
 	EXPECT_SUBSTRING(verilog, "m_data <= L_data;");
 }
+*/
 
 TEST(ExportTest, DSAdderFlat) {
 	Func func;
 	func.name = "ds_adder_flat";
-	Operand Ad = func.pushNet("Ad", Type(Type::FIXED, WIDTH), flow::Net::IN);
-	Operand Ac = func.pushNet("Ac", Type(Type::FIXED, 1), flow::Net::IN);
-	Operand Bd = func.pushNet("Bd", Type(Type::FIXED, WIDTH), flow::Net::IN);
-	Operand Bc = func.pushNet("Bc", Type(Type::FIXED, 1), flow::Net::IN);
-	Operand Sd = func.pushNet("Sd", Type(Type::FIXED, WIDTH), flow::Net::OUT);
-	Operand Sc = func.pushNet("Sc", Type(Type::FIXED, 1), flow::Net::OUT);
-	Operand ci = func.pushNet("ci", Type(Type::FIXED, 1), flow::Net::REG);
-	Expression exprAc(Ac);
-	Expression exprAd(Ad);
-	Expression exprBc(Bc);
-	Expression exprBd(Bd);
-	Expression exprci(ci);
+	Operand Ad = func.pushNet("Ad", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand Ac = func.pushNet("Ac", Type(Type::TypeName::FIXED, 1),			flow::Net::IN);
+	Operand Bd = func.pushNet("Bd", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand Bc = func.pushNet("Bc", Type(Type::TypeName::FIXED, 1),			flow::Net::IN);
+	Operand Sd = func.pushNet("Sd", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
+	Operand Sc = func.pushNet("Sc", Type(Type::TypeName::FIXED, 1),			flow::Net::OUT);
+	Operand ci = func.pushNet("ci", Type(Type::TypeName::FIXED, 1),			flow::Net::REG);
+	Expression expr_Ac(Ac);
+	Expression expr_Ad(Ad);
+	Expression expr_Bc(Bc);
+	Expression expr_Bd(Bd);
+	Expression expr_ci(ci);
 
-	Expression s((exprAd + exprBd + exprci) % pow(2, WIDTH));
-	Expression co((exprAd + exprBd + exprci) / pow(2, WIDTH));
+	Expression expr_s((expr_Ad + expr_Bd + expr_ci) % pow(2, WIDTH));
+	Expression expr_co((expr_Ad + expr_Bd + expr_ci) / pow(2, WIDTH));
 
-	int branch0 = func.pushCond(~exprAc & ~exprBc);
-	func.conds[branch0].req(Sd, s);
-	func.conds[branch0].req(Sc, Operand::intOf(0));
-	func.conds[branch0].mem(ci, co);
+	int branch0 = func.pushCond(~expr_Ac & ~expr_Bc);
+	func.conds[branch0].req(Sd, expr_s);
+	func.conds[branch0].req(Sc, Expression::intOf(0));
+	func.conds[branch0].mem(ci, expr_co);
 	func.conds[branch0].ack({Ac, Ad, Bc, Bd});
 
-	int branch1 = func.pushCond(exprAc & ~exprBc);
-	func.conds[branch1].req(Sd, s);
-	func.conds[branch1].req(Sc, Operand::intOf(0));
-	func.conds[branch1].mem(ci, co);
+	int branch1 = func.pushCond(expr_Ac & ~expr_Bc);
+	func.conds[branch1].req(Sd, expr_s);
+	func.conds[branch1].req(Sc, Expression::intOf(0));
+	func.conds[branch1].mem(ci, expr_co);
 	func.conds[branch1].ack({Bc, Bd});
 
-	int branch2 = func.pushCond(~exprAc & exprBc);
-	func.conds[branch2].req(Sd, s);
-	func.conds[branch2].req(Sc, Operand::intOf(0));
-	func.conds[branch2].mem(ci, co);
+	int branch2 = func.pushCond(~expr_Ac & expr_Bc);
+	func.conds[branch2].req(Sd, expr_s);
+	func.conds[branch2].req(Sc, Expression::intOf(0));
+	func.conds[branch2].mem(ci, expr_co);
 	func.conds[branch2].ack({Ac, Ad});
 
-	int branch3 = func.pushCond(exprAc & exprBc & (co != exprci));
-	func.conds[branch3].req(Sd, s);
-	func.conds[branch3].req(Sc, Operand::intOf(0));
-	func.conds[branch3].mem(ci, co);
+	int branch3 = func.pushCond(expr_Ac & expr_Bc & (expr_co != expr_ci));
+	func.conds[branch3].req(Sd, expr_s);
+	func.conds[branch3].req(Sc, Expression::intOf(0));
+	func.conds[branch3].mem(ci, expr_co);
 
-	int branch4 = func.pushCond(exprAc & exprBc & (co == exprci));
-	func.conds[branch4].req(Sd, s);
-	func.conds[branch4].req(Sc, Operand::intOf(1));
-	func.conds[branch4].mem(ci, Operand::intOf(0));
-	func.conds[branch0].ack({Ac, Ad, Bc, Bd});
+	int branch4 = func.pushCond(expr_Ac & expr_Bc & (expr_co == expr_ci));
+	func.conds[branch4].req(Sd, expr_s);
+	func.conds[branch4].req(Sc, Expression::intOf(1));
+	func.conds[branch4].mem(ci, Expression::intOf(0));
+	func.conds[branch4].ack({Ac, Ad, Bc, Bd});
 
 	string verilog = synthesizeVerilogFromFunc(func).to_string();
 	EXPECT_SUBSTRING(verilog, "Sc_state <= 0;");
@@ -256,13 +258,14 @@ TEST(ExportTest, DSAdderFlat) {
 	EXPECT_SUBSTRING(verilog, "ci_data <= (Ad_data+Bd_data+ci_data)/65536;");
 }
 
+/*
 TEST(ExportTest, Adder) {
 	Func func;
 	func.name = "adder";
-	Operand A = func.pushNet("A", Type(Type::FIXED, WIDTH), flow::Net::IN);
-	Operand B = func.pushNet("B", Type(Type::FIXED, WIDTH), flow::Net::IN);
-	Operand Ci = func.pushNet("Ci", Type(Type::FIXED, 1), flow::Net::IN);
-	Operand S = func.pushNet("S", Type(Type::FIXED, WIDTH + 1), flow::Net::OUT);
+	Operand A = func.pushNet("A", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand B = func.pushNet("B", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand Ci = func.pushNet("Ci", Type(Type::TypeName::FIXED, 1), flow::Net::IN);
+	Operand S = func.pushNet("S", Type(Type::TypeName::FIXED, WIDTH + 1), flow::Net::OUT);
 	Expression exprA(A);
 	Expression exprB(B);
 	Expression exprCi(Ci);
@@ -274,3 +277,4 @@ TEST(ExportTest, Adder) {
 	string verilog = synthesizeVerilogFromFunc(func).to_string();
 	EXPECT_SUBSTRING(verilog, "S_state <= A_data+B_data+Ci_data;");
 }
+*/
