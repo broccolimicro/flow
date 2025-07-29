@@ -2,13 +2,7 @@
 
 namespace clocked {
 
-Type::Type() {
-	type = FIXED;
-	width = 16;
-	shift = 0;
-}
-
-Type::Type(int type, int width, int shift) {
+Type::Type(TypeName type, int width, int shift) {
 	this->type = type;
 	this->width = width;
 	this->shift = shift;
@@ -17,11 +11,17 @@ Type::Type(int type, int width, int shift) {
 Type::~Type() {
 }
 
-Net::Net() {
-	this->purpose = WIRE;
+std::ostream& operator<<(std::ostream& os, const Type& type) {
+    return os << "(type = " << type.type
+              << ", width = " << type.width
+              << ", shift = " << type.shift << ")";
 }
 
-Net::Net(string name, Type type, int purpose) {
+Net::Net() {
+	this->purpose = Purpose::WIRE;
+}
+
+Net::Net(string name, clocked::Type type, Purpose purpose) {
 	this->name = name;
 	this->type = type;
 	this->purpose = purpose;
@@ -30,24 +30,30 @@ Net::Net(string name, Type type, int purpose) {
 Net::~Net() {
 }
 
-ValRdy::ValRdy() {
+std::ostream& operator<<(std::ostream& os, const Net& net) {
+    return os << "(name = " << net.name
+              << ", type = " << net.type
+              << ", purpose = " << net.purpose << ")";
+}
+
+Channel::Channel() {
 	valid = -1;
 	ready = -1;
 	data = -1;
 }
 
-ValRdy::~ValRdy() {
+Channel::~Channel() {
 }
 
-Operand ValRdy::getValid() {
+Operand Channel::getValid() {
 	return Operand::varOf(valid);
 }
 
-Operand ValRdy::getReady() {
+Operand Channel::getReady() {
 	return Operand::varOf(ready);
 }
 
-Operand ValRdy::getData() {
+Operand Channel::getData() {
 	return Operand::varOf(data);
 }
 
@@ -115,7 +121,7 @@ int Module::netCount() const {
 	return (int)nets.size();
 }
 
-int Module::pushNet(string name, Type type, int purpose) {
+int Module::pushNet(string name, Type type, Net::Purpose purpose) {
 	int index = (int)nets.size();
 	nets.push_back(Net(name, type, purpose));
 	return index;

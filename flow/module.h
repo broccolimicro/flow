@@ -14,40 +14,45 @@ using arithmetic::Operand;
 namespace clocked {
 
 struct Type {
-	Type();
-	Type(int type, int width, int shift=0);
-	~Type();
-
-	enum {
+	enum TypeName : int {
 		BITS = 0,
 		FIXED = 1
 	};
 
-	int type;
+	Type(TypeName type=TypeName::FIXED, int width=1, int shift=0);
+	~Type();
+
+	TypeName type;
 	int width;
 	int shift;
+
+	auto operator<=>(const Type &t) const = default;
+	friend std::ostream& operator<<(std::ostream& os, const Type& t);
 };
 
 struct Net {
-	Net();
-	Net(string name, Type type=Type(Type::BITS, 1), int purpose=WIRE);
-	~Net();
-
-	enum {
+	enum Purpose {
 		WIRE = 0,
 		IN = 1,
 		OUT = 2,
 		REG = 3,
 	};
 
+	Net();
+	Net(string name, Type type=Type(Type::TypeName::BITS, 1), Purpose purpose=Purpose::WIRE);
+	~Net();
+
 	string name;
 	Type type;
-	int purpose;
+	Purpose purpose;
+
+	auto operator<=>(const Net &n) const = default;
+	friend std::ostream& operator<<(std::ostream& os, const Net& n);
 };
 
-struct ValRdy {
-	ValRdy();
-	~ValRdy();
+struct Channel {
+	Channel();
+	~Channel();
 
 	int valid;
 	int ready;
@@ -90,7 +95,7 @@ struct Block {
 struct Module {
 	string name;
 	vector<Net> nets;
-	vector<ValRdy> chans;
+	vector<Channel> chans;
 	int reset;
 	int clk;
 
@@ -102,7 +107,7 @@ struct Module {
 	string netAt(int uid) const;
 	int netCount() const;
 
-	int pushNet(string name, Type type=Type(Type::BITS, 1), int purpose=Net::WIRE);
+	int pushNet(string name, Type type=Type(Type::TypeName::BITS, 1), Net::Purpose purpose=Net::Purpose::WIRE);
 };
 
 }
