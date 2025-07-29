@@ -7,6 +7,6 @@ namespace flow {
 
 clocked::Type synthesize_type(const flow::Type &type);
 void synthesize_chan(clocked::Module &mod, const flow::Net &net);
-clocked::Module synthesize_valrdy(const Func &func);
+clocked::Module synthesizeModuleFromFunc(const Func &func);
 
 }

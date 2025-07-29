@@ -1,5 +1,5 @@
-#include <stdexcept>
 #include <compare>
+#include <stdexcept>
 
 #include <arithmetic/expression.h>
 #include <interpret_arithmetic/export.h>
