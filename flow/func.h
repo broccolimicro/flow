@@ -77,7 +77,7 @@ struct Condition {
 	void ack(Operand in);
 	void ack(vector<Operand> in);
 
-	auto operator<=>(const Condition &cond);
+	auto operator<=>(const Condition &cond) const;
 	friend std::ostream& operator<<(std::ostream& os, const Condition& cond);
 };
 
