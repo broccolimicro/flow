@@ -120,7 +120,7 @@ bool operator!=(const Condition &c1, const Condition &c2) {
     return !(c1 == c2);
 }
 
-auto Condition::operator<=>(const Condition &other) const {
+std::strong_ordering Condition::operator<=>(const Condition &other) const {
 	if (auto cmp = uid <=> other.uid; cmp != 0) return cmp;
 	if (auto cmp = areSame(valid, other.valid); !cmp) return std::strong_ordering::less; // assume areSame returns bool
 	if (auto cmp = ins <=> other.ins; cmp != 0) return cmp;
