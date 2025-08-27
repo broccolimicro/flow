@@ -11,7 +11,15 @@
 
 namespace flow {
 
-clocked::Type synthesize_type(const Type &type) {
+arithmetic::Expression synthesizeExpression(const arithmetic::Expression &e, const mapping &ChannelToValid, const mapping &ChannelToData) {
+	Expression result(e);
+	//result.apply(ChannelToData);
+	std::map<int, int> probes;
+	return result;
+}
+
+
+clocked::Type synthesizeChannelType(const Type &type) {
 	clocked::Type result;
 	if (type.type == flow::Type::TypeName::BITS) {
 		result.type = clocked::Type::TypeName::BITS;
@@ -24,7 +32,7 @@ clocked::Type synthesize_type(const Type &type) {
 }
 
 
-void synthesize_chan(clocked::Module &mod, const Net &net) {
+void synthesizeChannel(clocked::Module &mod, const Net &net) {
 	static const clocked::Type wire(clocked::Type::TypeName::BITS, 1);
 	clocked::Channel channel;
 	clocked::Block &always = mod.blocks.back();
@@ -32,7 +40,7 @@ void synthesize_chan(clocked::Module &mod, const Net &net) {
 	if (net.purpose == flow::Net::Purpose::IN) {
 		channel.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::Purpose::IN);
 		channel.ready = mod.pushNet(net.name+"_ready", wire, clocked::Net::Purpose::OUT);
-		channel.data = mod.pushNet(net.name+"_data", synthesize_type(net.type), clocked::Net::Purpose::IN);
+		channel.data = mod.pushNet(net.name+"_data", synthesizeChannelType(net.type), clocked::Net::Purpose::IN);
 
 	} else if (net.purpose == flow::Net::Purpose::OUT) {
 		int valid_wire = mod.pushNet(net.name+"_valid", wire, clocked::Net::Purpose::OUT);
@@ -47,8 +55,8 @@ void synthesize_chan(clocked::Module &mod, const Net &net) {
 		}, Expression::varOf(channel.ready));
 		always._else.push_back(reset_valid_reg);
 
-		int data = mod.pushNet(net.name+"_data", synthesize_type(net.type), clocked::Net::Purpose::OUT);
-		channel.data = mod.pushNet(net.name+"_state", synthesize_type(net.type), clocked::Net::Purpose::REG);
+		int data = mod.pushNet(net.name+"_data", synthesizeChannelType(net.type), clocked::Net::Purpose::OUT);
+		channel.data = mod.pushNet(net.name+"_state", synthesizeChannelType(net.type), clocked::Net::Purpose::REG);
 		mod.assign.push_back(clocked::Assign(data, Expression::varOf(channel.data), true));
 		always.reset.push_back(clocked::Assign(channel.data, Expression::intOf(0)));
 
@@ -59,10 +67,10 @@ void synthesize_chan(clocked::Module &mod, const Net &net) {
 	} else if (net.purpose == flow::Net::Purpose::REG) {
 		channel.valid = -1;  //mod.pushNet(net.name+"_valid", wire, clocked::Net::Purpose::WIRE);
 		channel.ready = -1;  //TODO: these could be wires for debug or mere modelling in cocotb harness
-		channel.data = mod.pushNet(net.name+"_data", synthesize_type(net.type), clocked::Net::Purpose::REG);
+		channel.data = mod.pushNet(net.name+"_data", synthesizeChannelType(net.type), clocked::Net::Purpose::REG);
 		always.reset.push_back(clocked::Assign(channel.data, Expression::intOf(0)));
 
-	//TODO: migrate out of synthesize_chan(), into synthesizeModuleFromFunc(), if/when COND's are no longer detected in netlist?
+	//TODO: migrate out of synthesizeChannel(), into synthesizeModuleFromFunc(), if/when COND's are no longer detected in netlist?
 	} else if (net.purpose == flow::Net::Purpose::COND) {
 		channel.ready = mod.pushNet(net.name+"_ready", wire, clocked::Net::Purpose::WIRE);
 		channel.data = -1;
@@ -104,8 +112,9 @@ clocked::Module synthesizeModuleFromFunc(const Func &func) {
 	mapping funcNetToChannelValid;
 	mapping funcNetToChannelReady;
 	//TODO: set<int> internalRegisters; ???
+
 	for (int netIdx = 0; netIdx < (int)func.nets.size(); netIdx++) {
-		synthesize_chan(mod, func.nets[netIdx]);
+		synthesizeChannel(mod, func.nets[netIdx]);
 
 		// Map flow::Func nets to clocked::Channel nets
 		funcNetToChannelData.set(netIdx, mod.chans[netIdx].data);
@@ -206,7 +215,7 @@ clocked::Module synthesizeModuleFromFunc(const Func &func) {
 			}
 		}
 
-		predicate.apply(funcNetToChannelData);
+		predicate = synthesizeExpression(predicate, funcNetToChannelValid, funcNetToChannelData);
 		branch_rule.guard = arithmetic::ident(predicate) & branch_ready;
 		always.rules.push_back(branch_rule);
 
