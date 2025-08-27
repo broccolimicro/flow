@@ -4,6 +4,8 @@
 
 #include <gtest/gtest.h>
 
+#include <common/mapping.h>
+#include <common/mock_netlist.h>
 #include <flow/func.h>
 #include <flow/module.h>
 #include <flow/synthesize.h>
@@ -16,11 +18,12 @@
     EXPECT_EQ((source).find(substring), std::string::npos) \
 		<< "ERROR: Expected Verilog to NOT contain substring \"" << (substring) << "\""
 
+using std::filesystem::absolute;
+using std::filesystem::current_path;
+
 using namespace flow;
 using arithmetic::Expression;
 using arithmetic::Operand;
-using std::filesystem::absolute;
-using std::filesystem::current_path;
 
 const int WIDTH = 16;
 const std::filesystem::path TEST_DIR = absolute(current_path() / "tests");
@@ -278,3 +281,62 @@ TEST(ExportTest, Adder) {
 	EXPECT_SUBSTRING(verilog, "S_state <= A_data+B_data+Ci_data;");
 }
 */
+
+//auto get_channel_probe = [](arithmetic::Operand &operand) {
+//	vector<arithmetic::Operand> probe_args = { arithmetic::Operand::stringOf("probe"), operand };
+//	return Expression(arithmetic::Operation::CALL, probe_args);
+//};
+
+TEST(ModuleSynthesis, Probes) {
+	MockNetlist fn;
+	arithmetic::Operand A = arithmetic::Operand::varOf(fn.netIndex("A", true));
+	arithmetic::Operand B = arithmetic::Operand::varOf(fn.netIndex("B", true));
+	arithmetic::Operand C = arithmetic::Operand::varOf(fn.netIndex("C", true));
+	arithmetic::Operand x = arithmetic::Operand::varOf(fn.netIndex("x", true));
+	Expression expr_A(A);
+	Expression expr_B(B);
+	Expression expr_C(C);
+	Expression expr_x(x);
+
+	MockNetlist mod;
+	arithmetic::Operand A_valid = arithmetic::Operand::varOf(mod.netIndex("A_valid", true));
+	arithmetic::Operand B_valid = arithmetic::Operand::varOf(mod.netIndex("B_valid", true));
+	arithmetic::Operand C_valid = arithmetic::Operand::varOf(mod.netIndex("C_valid", true));
+	arithmetic::Operand A_data = arithmetic::Operand::varOf(mod.netIndex("A_data", true));
+	arithmetic::Operand B_data = arithmetic::Operand::varOf(mod.netIndex("B_data", true));
+	arithmetic::Operand C_data = arithmetic::Operand::varOf(mod.netIndex("C_data", true));
+	arithmetic::Operand x_data = arithmetic::Operand::varOf(mod.netIndex("x", true));//TODO:  x_data?
+	Expression expr_A_valid(A_valid);
+	Expression expr_B_valid(B_valid);
+	Expression expr_C_valid(C_valid);
+	Expression expr_A_data(A_data);
+	Expression expr_B_data(B_data);
+	Expression expr_C_data(C_data);
+	Expression expr_x_data(A_data);
+
+	mapping ChannelValid;
+	ChannelValid.set(A.index, A_valid.index);
+	ChannelValid.set(B.index, B_valid.index);
+	ChannelValid.set(C.index, C_valid.index);
+
+	mapping ChannelData;
+	ChannelData.set(A.index, A_data.index);
+	ChannelData.set(B.index, B_data.index);
+	ChannelData.set(C.index, C_data.index);
+	ChannelData.set(x.index, x_data.index);
+
+	Expression probe_A = arithmetic::call("probe", {A});
+	Expression probe_B = arithmetic::call("probe", {B});
+	Expression probe_C = arithmetic::call("probe", {C});
+	Expression three = Expression::intOf(3);
+	Expression six = Expression::intOf(6);
+
+	Expression target = ((expr_B_valid || (expr_A_valid && (expr_A_data == three)) || (expr_x_data != six))) && expr_C_valid;
+	Expression before = (probe_B || (probe_A == three) || (expr_x != six)) && probe_C;
+	Expression after = synthesizeExpression(before, ChannelValid, ChannelData);
+
+	target.minimize();
+	EXPECT_TRUE(areSame(after, target)) << endl << "TARGET: " << target
+		<< endl << "BEFORE: " << before
+		<< endl << "AFTER: " << after;
+}
