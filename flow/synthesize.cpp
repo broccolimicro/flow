@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <functional>
+#include <iterator>
 #include <set>
 
 #include <arithmetic/algorithm.h>
@@ -8,16 +10,10 @@
 
 #include "synthesize.h"
 
+using arithmetic::Expression;
+using arithmetic::Operation;
 
 namespace flow {
-
-arithmetic::Expression synthesizeExpression(const arithmetic::Expression &e, const mapping &ChannelToValid, const mapping &ChannelToData) {
-	Expression result(e);
-	//result.apply(ChannelToData);
-	std::map<int, int> probes;
-	return result;
-}
-
 
 clocked::Type synthesizeChannelType(const Type &type) {
 	clocked::Type result;
@@ -28,6 +24,111 @@ clocked::Type synthesizeChannelType(const Type &type) {
 	}
 	result.width = type.width;
 	result.shift = type.shift;
+	return result;
+}
+
+
+//TODO: push to arithmetic
+bool isBooleanOperation(const Operation::OpType &op) {
+    return op == Operation::OpType::TYPE_BOOLEAN_AND
+           || op == Operation::OpType::TYPE_BOOLEAN_OR
+           || op == Operation::OpType::TYPE_BOOLEAN_XOR
+           || op == Operation::OpType::TYPE_BOOLEAN_NOT
+           || op == Operation::OpType::TYPE_EQUAL
+           || op == Operation::OpType::TYPE_NOT_EQUAL
+           || op == Operation::OpType::TYPE_LESS
+           || op == Operation::OpType::TYPE_GREATER
+           || op == Operation::OpType::TYPE_LESS_EQUAL
+           || op == Operation::OpType::TYPE_GREATER_EQUAL;
+}
+
+
+bool isProbeCall(const Operation &o) {
+	return (o.func == Operation::OpType::TYPE_CALL)
+		&& (!o.operands.empty())
+		&& (o.operands[0].cnst.sval == "probe");
+}
+
+
+Expression synthesizeExpression(const Expression &e, const mapping &ChannelToValid, const mapping &ChannelToData) {
+	Expression result(e);
+
+	//TODO: Only substitute channel references, not local vars
+	//std::set<size_t> non_channel_vars;
+	//std::set_difference(
+	//		ChannelToData.begin(), ChannelToData.end(),
+	//		ChannelToValid.begin(), ChannelToValid.end(),
+	//		std::inserter(non_channel_vars, non_channel_vars.begin())
+	//);
+
+	auto emplaceProbe = [&](size_t parent_expr_operation_idx, size_t channel_idx) {
+		cout << "     emplace: e" << parent_expr_operation_idx << " <- v" << channel_idx << endl;
+		Operation substitution(Operation::OpType::TYPE_IDENTITY, {Operand::varOf(channel_idx)});
+		substitution.exprIndex = parent_expr_operation_idx;
+		result.sub.setExpr(substitution);
+	};
+
+	cout << "<<<<<<<<<<<>>>>>>>>>>>" << endl;
+
+	if (e.sub.size() < 2) {
+		const Operation &operation = *e.getExpr(0);
+		if (!isProbeCall(operation)) { return e; }
+
+		size_t channel_idx = 0;
+		size_t channel_valid = ChannelToValid.map(channel_idx);
+		emplaceProbe(0, channel_valid);
+
+		cout << ">>>>>>>>>>>early<<<<<<<<<<<" << endl;
+		result.minimize();
+		return result;
+	}
+
+	vector<size_t> validity_ceiling = { e.top.index };
+	for (arithmetic::ConstDownIterator operation_it(e.sub, {e.top}); !operation_it.done(); ++operation_it) {
+		const Operation &operation = *operation_it;
+
+		// New, lower "or" ceiling?
+		if (operation.func == Operation::OpType::TYPE_BOOLEAN_OR) {
+			validity_ceiling.push_back(operation.exprIndex);
+		}
+
+		// Descend down to all probe() calls
+		if (operation.func == Operation::OpType::TYPE_CALL) {
+			if (operation.operands.size() < 2 || operation.operands[0].cnst.sval != "probe") { continue; }
+
+			size_t operation_idx = operation.exprIndex;
+			size_t channel_idx = operation.operands[1].index;
+			size_t channel_data = ChannelToData.map(channel_idx);
+			size_t channel_valid = ChannelToValid.map(channel_idx);
+			cout << "probe channel v" << channel_idx << " [v:" << channel_valid << ",d:" << channel_data << "]" << endl;
+
+			size_t parent_operation_idx = validity_ceiling.back();
+			cout << "       parent " << parent_operation_idx << endl;
+
+			if (parent_operation_idx == operation_idx) {
+				emplaceProbe(operation_idx, channel_valid);
+				continue;
+			}
+
+			Operation parent_operation = *e.getExpr(parent_operation_idx);
+			Operand parent_copy = result.sub.pushExpr(parent_operation);
+
+			emplaceProbe(operation_idx, channel_data);
+			Operation parent_expr_only_when_valid(Operation::OpType::TYPE_BOOLEAN_AND, {Operand::varOf(channel_valid), parent_copy}); //Operand::exprOf(parent_operation_idx)});
+
+			parent_expr_only_when_valid.exprIndex = parent_operation_idx;
+			result.sub.setExpr(parent_expr_only_when_valid);
+		}
+
+		//TODO: when backtracking, pop off ceiling
+		cout << validity_ceiling.back() << endl;
+	}
+
+	cout << "><><<>><><<>><><<>><><" << endl;
+	cout << result.to_string();
+	cout << ">>>>>>>>>>><<<<<<<<<<<" << endl;
+	//result.minimize();
+	result.tidy();
 	return result;
 }
 
@@ -135,6 +236,8 @@ clocked::Module synthesizeModuleFromFunc(const Func &func) {
 		branch_rule.assign.push_back(clocked::Assign(branch_id_reg, Expression::intOf(branch_id)));
 
 		Expression predicate = condIt->valid;
+		//predicate = isValid(predicate);  //TODO: ensure this is used for condition predicates & not body expressions during synthesis (& that our synthesizeExpressions probe tests include this assumption)
+		predicate = synthesizeExpression(predicate, funcNetToChannelValid, funcNetToChannelData);
 		//predicate.minimize();
 
 		//
@@ -215,7 +318,6 @@ clocked::Module synthesizeModuleFromFunc(const Func &func) {
 			}
 		}
 
-		predicate = synthesizeExpression(predicate, funcNetToChannelValid, funcNetToChannelData);
 		branch_rule.guard = arithmetic::ident(predicate) & branch_ready;
 		branch_rule.guard.minimize();
 		always.rules.push_back(branch_rule);
