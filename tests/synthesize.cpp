@@ -26,7 +26,7 @@ using arithmetic::Operation;
 using arithmetic::Operand;
 using namespace flow;
 
-const int WIDTH = 16;
+//const int WIDTH = 16;
 const std::filesystem::path TEST_DIR = absolute(current_path() / "tests");
 
 
@@ -64,7 +64,7 @@ parse_verilog::module_def synthesizeVerilogFromFunc(const Func &func) {
 }
 
 /*
-TEST(ExportTest, Source) {
+TEST(ModuleSynthesis, Source) {
 	Func func;
 	func.name = "source";
 	Operand R = func.pushNet("R", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
@@ -76,7 +76,7 @@ TEST(ExportTest, Source) {
 	EXPECT_SUBSTRING(verilog, "R_state <= 1");
 }
 
-TEST(ExportTest, Sink) {
+TEST(ModuleSynthesis, Sink) {
 	Func func;
 	func.name = "sink";
 	Operand L = func.pushNet("L", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
@@ -87,7 +87,7 @@ TEST(ExportTest, Sink) {
 	string verilog = synthesizeVerilogFromFunc(func).to_string();
 }
 
-TEST(ExportTest, Buffer) {
+TEST(ModuleSynthesis, Buffer) {
 	Func func;
 	func.name = "buffer";
 	Operand L = func.pushNet("L", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
@@ -102,7 +102,7 @@ TEST(ExportTest, Buffer) {
 	EXPECT_SUBSTRING(verilog, "R_state <= L_data;");
 }
 
-TEST(ExportTest, Copy) {
+TEST(ModuleSynthesis, Copy) {
 	Func func;
 	func.name = "copy";
 	Operand L = func.pushNet("L", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
@@ -120,7 +120,7 @@ TEST(ExportTest, Copy) {
 	EXPECT_SUBSTRING(verilog, "R1_state <= L_data;");
 }
 
-TEST(ExportTest, Func) {
+TEST(ModuleSynthesis, Func) {
 	Func func;
 	func.name = "func";
 	Operand L0 = func.pushNet("L0", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
@@ -140,7 +140,7 @@ TEST(ExportTest, Func) {
 	EXPECT_NO_SUBSTRING(verilog, "R_state <= L0_data||L1_data;");
 }
 
-TEST(ExportTest, Merge) {
+TEST(ModuleSynthesis, Merge) {
 	Func func;
 	func.name = "merge";
 	Operand L0 = func.pushNet("L0", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
@@ -158,13 +158,13 @@ TEST(ExportTest, Merge) {
 	int branch1 = func.pushCond(exprC == Expression::intOf(1));
 	func.conds[branch1].req(R, exprL1);
 	func.conds[branch1].ack({C, L1});
-;
+
 	string verilog = synthesizeVerilogFromFunc(func).to_string();
 	EXPECT_SUBSTRING(verilog, "R_state <= L0_data;");
 	EXPECT_SUBSTRING(verilog, "R_state <= L1_data;");
 }
 
-TEST(ExportTest, Split) {
+TEST(ModuleSynthesis, Split) {
 	Func func;
 	func.name = "split";
 	Operand L = func.pushNet("L", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
@@ -187,7 +187,7 @@ TEST(ExportTest, Split) {
 	EXPECT_SUBSTRING(verilog, "R1_state <= L_data;");
 }
 
-TEST(ExportTest, SAdder) {
+TEST(ModuleSynthesis, StreamingAdder) {
 	Func func;
 	func.name = "s_adder";
 	Operand L = func.pushNet("L", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
@@ -263,19 +263,21 @@ TEST(ExportTest, DSAdderFlat) {
 }
 
 /*
-TEST(ExportTest, Adder) {
+TEST(ModuleSynthesis, FullAdder) {
 	Func func;
-	func.name = "adder";
+	func.name = "full_adder";
 	Operand A = func.pushNet("A", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
 	Operand B = func.pushNet("B", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand S = func.pushNet("S", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
 	Operand Ci = func.pushNet("Ci", Type(Type::TypeName::FIXED, 1), flow::Net::IN);
-	Operand S = func.pushNet("S", Type(Type::TypeName::FIXED, WIDTH + 1), flow::Net::OUT);
+	Operand Co = func.pushNet("Co", Type(Type::TypeName::FIXED, 1), flow::Net::OUT);
 	Expression exprA(A);
 	Expression exprB(B);
 	Expression exprCi(Ci);
 
-	int branch0 = func.pushCond(exprA & exprB & exprCi);
-	func.conds[branch0].req(S, exprA + exprB + exprCi);
+	int branch0 = func.pushCond(Expression::boolOf(true));
+	func.conds[branch0].req(S, bitwiseXor(bitwiseXor(exprA, exprB), exprCi));
+	func.conds[branch0].req(Co, (exprA && exprB) + (exprCi && bitwiseXor(exprA, exprB)));
 	func.conds[branch0].ack({A, B, Ci});
 
 	string verilog = synthesizeVerilogFromFunc(func).to_string();
