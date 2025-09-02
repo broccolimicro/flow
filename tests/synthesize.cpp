@@ -329,75 +329,77 @@ TEST(ModuleSynthesis, ChannelProbes) {
 	// Base case
 	Expression valid_before = probe_A;
 	Expression valid_target = expr_A_valid;
-	Expression valid_after = synthesizeExpression(valid_before, ChannelValid, ChannelData);
+	valid_target.minimize();
+	Expression valid_after = synthesizeExpressionProbes(valid_before, ChannelValid, ChannelData);
 
-	//valid_target.minimize();
 	EXPECT_TRUE(areSame(valid_after, valid_target))
 		<< endl << "BEFORE: " << valid_before
-		<< endl << "TARGET: " << valid_target
-		<< endl << "AFTER: " << valid_after;
+		<< endl << "AFTER: " << valid_after
+		<< endl << "TARGET: " << valid_target;
 
 	Expression zero = Expression::intOf(0);
 	Expression data_before = (probe_A == zero);
 	Expression data_target = expr_A_valid & (expr_A_data == zero);
-	Expression data_after = synthesizeExpression(data_before, ChannelValid, ChannelData);
+	data_target.minimize();
+	Expression data_after = synthesizeExpressionProbes(data_before, ChannelValid, ChannelData);
 
-	//data_target.minimize();
 	EXPECT_TRUE(areSame(data_after, data_target))
 		<< endl << "BEFORE: " << data_before
-		<< endl << "TARGET: " << data_target
-		<< endl << "AFTER: " << data_after;
+		<< endl << "AFTER: " << data_after
+		<< endl << "TARGET: " << data_target;
 
 
 	//// Masked Addition
-	//// "Keep A’s lower byte if it’s real, then increment."
-	// (A & 0xFF) + 1
+	//// "Keep A’s lower byte[-ish] if it’s real, then increment."
+	// (A & 0xF7) + 1
 	Expression f7 = Expression::intOf(0xf7);
 	Expression one = Expression::intOf(1);
 	Expression ma_before = (probe_A && f7) + one;
-	Expression ma_target = ((expr_A_data && f7) && expr_A_valid) + one;
-	Expression ma_after = synthesizeExpression(ma_before, ChannelValid, ChannelData);
+	Expression ma_target = (expr_A_valid & (expr_A_data && f7)) + one;
+	ma_target.minimize();
+	Expression ma_after = synthesizeExpressionProbes(ma_before, ChannelValid, ChannelData);
 
-	//ma_target.minimize();
 	EXPECT_TRUE(areSame(ma_after, ma_target))
 		<< endl << "BEFORE: " << ma_before
-		<< endl << "TARGET: " << ma_target
-		<< endl << "AFTER: " << ma_after;
+		<< endl << "AFTER: " << ma_after
+		<< endl << "TARGET: " << ma_target;
 
 	//// Bitwise Inversion
 	//// "Negate only the known."
 	// ~(A | B)
 	Expression bi_before = ~(probe_A | probe_B);
-	Expression bi_target = (~(expr_A_data | expr_B_data)) && expr_A_valid && expr_B_valid;
-	Expression bi_after = synthesizeExpression(bi_before, ChannelValid, ChannelData);
+	Expression bi_target = ~(expr_A_valid & expr_B_valid & (expr_A_data | expr_B_data));
+	bi_target.minimize();
+	Expression bi_after = synthesizeExpressionProbes(bi_before, ChannelValid, ChannelData);
 
-	//bi_target.minimize();
 	EXPECT_TRUE(areSame(bi_after, bi_target))
 		<< endl << "BEFORE: " << bi_before
-		<< endl << "TARGET: " << bi_target
-		<< endl << "AFTER: " << bi_after;
+		<< endl << "AFTER: " << bi_after
+		<< endl << "TARGET: " << bi_target;
 
 	//// Deep Boolean, Top Arithmetic
 	//// "The logic part is fragile; Z is solid."
 	// ((A < 3) && (B > 2)) + B
 	Expression dbta_before = ((probe_A < 3) && (probe_B > 2)) + probe_B;
-	Expression dbta_target = ((expr_A_valid && (expr_A_data < 3)) && (expr_B_valid && (expr_B_data > 2))) + expr_B_valid;
-	Expression dbta_after = synthesizeExpression(dbta_before, ChannelValid, ChannelData);
+	//Expression dbta_target = ((expr_A_valid && (expr_A_data < 3)) && (expr_B_valid && (expr_B_data > 2))) + expr_B_valid;
+	Expression dbta_target = expr_A_valid & expr_B_valid & (((expr_A_data < 3) && (expr_B_data > 2)) + expr_B_data);
+	dbta_target.minimize();
+	Expression dbta_after = synthesizeExpressionProbes(dbta_before, ChannelValid, ChannelData);
 
-	//dbta_target.minimize();
 	EXPECT_TRUE(areSame(dbta_after, dbta_target))
 		<< endl << "BEFORE: " << dbta_before
-		<< endl << "TARGET: " << dbta_target
-		<< endl << "AFTER: " << dbta_after;
+		<< endl << "AFTER: " << dbta_after
+		<< endl << "TARGET: " << dbta_target;
 
+	//TODO:
 	//// Indexing Time
 	//// "The array is stable, but not your index math."
 	// arr[B + 2]
 	//Expression it_before = expr_x[probe_A + 2];  //arithmetic::evaluate()
 	//Expression it_target = expr_x[(expr_A_valid && expr_A_data) + 2];
-	//Expression it_after = synthesizeExpression(it_before, ChannelValid, ChannelData);
+	//it_target.minimize();
+	//Expression it_after = synthesizeExpressionProbes(it_before, ChannelValid, ChannelData);
 
-	////it_target.minimize();
 	//EXPECT_TRUE(areSame(it_after, it_target))
 	//	<< endl << "BEFORE: " << it_before
 	//	<< endl << "TARGET: " << it_target
@@ -407,7 +409,6 @@ TEST(ModuleSynthesis, ChannelProbes) {
 	//// "Compute once, reuse — but only if it was valid."
 	// T = (A + B);
 	// U = (T * 2) + (T >> 1);
-	//TODO:
 }
 
 
@@ -430,7 +431,7 @@ TEST(ModuleSynthesis, ChannelProbes) {
 //	Operand A_data = Operand::varOf(mod.netIndex("A_data", true));
 //	Operand B_data = Operand::varOf(mod.netIndex("B_data", true));
 //	Operand C_data = Operand::varOf(mod.netIndex("C_data", true));
-//	Operand x_data = Operand::varOf(mod.netIndex("x", true));//TODO:  x_data?
+//	Operand x_data = Operand::varOf(mod.netIndex("x", true));  //TODO: x_data?
 //	Expression expr_A_valid(A_valid);
 //	Expression expr_B_valid(B_valid);
 //	Expression expr_C_valid(C_valid);
@@ -456,7 +457,7 @@ TEST(ModuleSynthesis, ChannelProbes) {
 //
 //	Expression target = ((expr_B_valid || (expr_A_valid && (expr_A_data == three)) || (expr_x_data != six))) && expr_C_valid;
 //	Expression before = (probe_B || (probe_A == three) || (expr_x != six)) && probe_C;
-//	Expression after = synthesizeExpression(before, ChannelValid, ChannelData);
+//	Expression after = synthesizeExpressionProbes(before, ChannelValid, ChannelData);
 //
 //	target.minimize();
 //	EXPECT_TRUE(areSame(after, target))
