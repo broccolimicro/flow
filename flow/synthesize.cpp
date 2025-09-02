@@ -217,11 +217,13 @@ clocked::Module synthesizeModuleFromFunc(const Func &func) {
 
 		predicate = synthesizeExpression(predicate, funcNetToChannelValid, funcNetToChannelData);
 		branch_rule.guard = arithmetic::ident(predicate) & branch_ready;
+		branch_rule.guard.minimize();
 		always.rules.push_back(branch_rule);
 
 		// Ensure only this branch executes until transaction is complete
 		Expression branch_selector = arithmetic::ident(Expression::varOf(branch_id_reg) == Expression::intOf(branch_id));
 		branch_ready = branch_selector & branch_ready;
+		branch_ready.minimize();
 		mod.assign.push_back(clocked::Assign(mod.chans[condIt->uid].ready, branch_ready, true));
 
 		branch_id++;
@@ -246,7 +248,7 @@ clocked::Module synthesizeModuleFromFunc(const Func &func) {
 			}
 
 			Expression chan_ready_out = chan_ready; //chan_nvalid | chan_ready;
-			//chan_ready_out.minimize();
+			chan_ready_out.minimize();
 			mod.assign.push_back(clocked::Assign(mod.chans[netIdx].ready, chan_ready_out, true));
 		}
 	}
