@@ -68,8 +68,12 @@ Expression synthesizeExpressionProbes(const Expression &e, const mapping &Channe
 		result.sub.setExpr(substitution);
 	};
 
+	size_t subexpr_count = e.sub.size();
+	if (subexpr_count == 0) {
+		return e;
 
-	if (e.sub.size() < 2) {
+	} else if (subexpr_count == 1) {
+
 		const Operation &operation = *e.getExpr(0);
 		if (!isProbeCall(operation)) { return e; }
 
@@ -104,9 +108,9 @@ Expression synthesizeExpressionProbes(const Expression &e, const mapping &Channe
 			Operation parent_operation = *e.getExpr(parent_operation_idx);
 
 			Operand parent_copy = result.sub.pushExpr(parent_operation);
-			vector<Operand> new_parent_operands = {parent_copy};  //Operand::exprOf(parent_operation_idx)});
+			vector<Operand> new_parent_operands = {parent_copy};  //Operand::exprOf(parent_operation_idx);
 
-		// For each channel_data substitution, append an "&& channel_valid" atop this BOOLEAN_OR
+			// For each channel_data substitution, append an "&& channel_valid" atop this BOOLEAN_OR
 			for (const Operation &probe_operation : child_probes) {
 				size_t child_operation_idx = probe_operation.exprIndex;
 				size_t channel_idx = probe_operation.operands[1].index;
@@ -140,7 +144,7 @@ Expression synthesizeExpressionProbes(const Expression &e, const mapping &Channe
 		Operation parent_operation = *e.getExpr(parent_operation_idx);
 
 		Operand parent_copy = result.sub.pushExpr(parent_operation);
-		vector<Operand> new_parent_operands = {parent_copy};  //Operand::exprOf(parent_operation_idx)});
+		vector<Operand> new_parent_operands = {parent_copy};  //Operand::exprOf(parent_operation_idx);
 
 		// For each channel_data substitution, append an "&& channel_valid" at the top
 		for (const Operation &probe_operation : child_probes) {
