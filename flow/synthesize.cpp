@@ -30,22 +30,22 @@ clocked::Type synthesizeChannelType(const Type &type) {
 
 //TODO: push helpers to arithmetic
 bool isProbeCall(const Operation &o) {
-	return (o.func == Operation::OpType::TYPE_CALL)
+	return (o.func == Operation::OpType::CALL)
 		&& (!o.operands.empty())
 		&& (o.operands[0].cnst.sval == "probe");
 }
 
 bool isBooleanOperation(const Operation::OpType &op) {
-	return op == Operation::OpType::TYPE_BOOLEAN_AND
-		|| op == Operation::OpType::TYPE_BOOLEAN_OR
-		|| op == Operation::OpType::TYPE_BOOLEAN_XOR
-		|| op == Operation::OpType::TYPE_BOOLEAN_NOT
-		|| op == Operation::OpType::TYPE_EQUAL
-		|| op == Operation::OpType::TYPE_NOT_EQUAL
-		|| op == Operation::OpType::TYPE_LESS
-		|| op == Operation::OpType::TYPE_GREATER
-		|| op == Operation::OpType::TYPE_LESS_EQUAL
-		|| op == Operation::OpType::TYPE_GREATER_EQUAL;
+	return op == Operation::OpType::BOOLEAN_AND
+		|| op == Operation::OpType::BOOLEAN_OR
+		|| op == Operation::OpType::BOOLEAN_XOR
+		|| op == Operation::OpType::BOOLEAN_NOT
+		|| op == Operation::OpType::EQUAL
+		|| op == Operation::OpType::NOT_EQUAL
+		|| op == Operation::OpType::LESS
+		|| op == Operation::OpType::GREATER
+		|| op == Operation::OpType::LESS_EQUAL
+		|| op == Operation::OpType::GREATER_EQUAL;
 }
 
 
@@ -63,7 +63,7 @@ Expression synthesizeExpressionProbes(const Expression &e, const mapping &Channe
 
 	auto emplaceProbe = [&](size_t parent_expr_operation_idx, size_t channel_idx) {
 		cout << " ~ ~ emplace: e" << parent_expr_operation_idx << " <- v" << channel_idx << " ~ ~" << endl;
-		Operation substitution(Operation::OpType::TYPE_IDENTITY, {Operand::varOf(channel_idx)});
+		Operation substitution(Operation::OpType::IDENTITY, {Operand::varOf(channel_idx)});
 		substitution.exprIndex = parent_expr_operation_idx;
 		result.sub.setExpr(substitution);
 	};
@@ -102,7 +102,7 @@ Expression synthesizeExpressionProbes(const Expression &e, const mapping &Channe
 		}
 
 		// New, lower "or" ceiling?
-		if (operation.func == Operation::OpType::TYPE_BOOLEAN_OR) {
+		if (operation.func == Operation::OpType::BOOLEAN_OR) {
 			cout << "!!" << endl;
 			size_t parent_operation_idx = operation.exprIndex;
 			Operation parent_operation = *e.getExpr(parent_operation_idx);
@@ -125,7 +125,7 @@ Expression synthesizeExpressionProbes(const Expression &e, const mapping &Channe
 			}
 			child_probes.clear();
 
-			Operation parent_expr_only_when_valid(Operation::OpType::TYPE_BOOLEAN_AND, new_parent_operands);
+			Operation parent_expr_only_when_valid(Operation::OpType::BOOLEAN_AND, new_parent_operands);
 			parent_expr_only_when_valid.exprIndex = parent_operation_idx;
 			result.sub.setExpr(parent_expr_only_when_valid);
 			continue;
@@ -167,7 +167,7 @@ Expression synthesizeExpressionProbes(const Expression &e, const mapping &Channe
 		}
 		child_probes.clear();
 
-		Operation parent_expr_only_when_valid(Operation::OpType::TYPE_BOOLEAN_AND, new_parent_operands);
+		Operation parent_expr_only_when_valid(Operation::OpType::BOOLEAN_AND, new_parent_operands);
 		parent_expr_only_when_valid.exprIndex = parent_operation_idx;
 		result.sub.setExpr(parent_expr_only_when_valid);
 	}
