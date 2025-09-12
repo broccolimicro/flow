@@ -85,7 +85,7 @@ Expression synthesizeExpressionProbes(const Expression &e, const mapping &Channe
 		if (!isProbeCall(operation)) { return e; }
 
 		size_t channel_idx = 0;
-		//size_t channel_data = ChannelToData.map(channel_idx);
+		size_t channel_data = ChannelToData.map(channel_idx);
 		size_t channel_valid = ChannelToValid.map(channel_idx);
 		cout << "probe channel v" << channel_idx << " [v:" << channel_valid << ",d:" << channel_data << "]" << endl;
 		emplaceProbe(0, channel_valid);
