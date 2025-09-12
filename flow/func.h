@@ -1,13 +1,12 @@
 #pragma once
 
-#include <common/net.h>
-#include <arithmetic/expression.h>
-
-#include <stdio.h>
+#include <compare>
+#include <iostream>
 #include <string>
 #include <vector>
 
-using namespace std;
+#include <arithmetic/expression.h>
+
 using arithmetic::Expression;
 using arithmetic::Operand;
 
@@ -27,9 +26,10 @@ struct Type {
 	int shift;
 
 	auto operator<=>(const Type &t) const = default;
+	bool operator==(const Type& other) const = default;
+	bool operator!=(const Type& other) const = default;
 	friend std::ostream& operator<<(std::ostream& os, const Type& t);
 };
-
 
 struct Net {
 	enum Purpose {
@@ -40,16 +40,17 @@ struct Net {
 		COND = 4,
 	};
 
-	Net(string name="", Type type=Type(Type::TypeName::BITS, 1), Purpose purpose=NONE);
+	Net(string name="", Type type=Type(Type::TypeName::BITS, 1), Purpose purpose=Purpose::NONE);
 	~Net();
-
 
 	string name;
 	Type type;
 	Purpose purpose;
 
 	auto operator<=>(const Net &n) const = default;
-	friend std::ostream& operator<<(std::ostream& os, const Type& t);
+	bool operator==(const Net &n) const = default;
+	bool operator!=(const Net &n) const = default;
+	friend std::ostream& operator<<(std::ostream& os, const Net& n);
 };
 
 struct Condition {
@@ -83,7 +84,6 @@ struct Condition {
 
 bool operator==(const Condition &c1, const Condition &c2);
 bool operator!=(const Condition &c1, const Condition &c2);
-
 
 struct Input {
 	Input();

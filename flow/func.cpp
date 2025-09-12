@@ -1,11 +1,11 @@
+#include "func.h"
+
 #include <compare>
-#include <stdexcept>
+#include <iostream>
+#include <string>
+#include <vector>
 
 #include <arithmetic/expression.h>
-#include <interpret_arithmetic/export.h>
-#include <parse_expression/expression.h>
-
-#include "func.h"
 
 using arithmetic::Expression;
 using arithmetic::Operand;
@@ -22,9 +22,16 @@ Type::~Type() {
 }
 
 std::ostream& operator<<(std::ostream& os, const Type& type) {
-    return os << "(type = " << type.type
-              << ", width = " << type.width
-              << ", shift = " << type.shift << ")";
+		string typeName;
+		switch (type.type) {
+			case Type::TypeName::BITS: typeName="BITS"; break;
+			case Type::TypeName::FIXED:
+			default: typeName="FIXED";
+		}
+
+    return os << "Type(type:" << typeName
+              << ", width:" << type.width
+              << ", shift:" << type.shift << ")";
 }
 
 Net::Net(string name, Type type, Purpose purpose) {
@@ -37,10 +44,32 @@ Net::~Net() {
 }
 
 std::ostream& operator<<(std::ostream& os, const Net& net) {
-    return os << "(name = " << net.name
-              << ", type = " << net.type
-              << ", purpose = " << net.purpose << ")";
+		string purpose;
+		switch (net.purpose) {
+			case Net::Purpose::IN: purpose = "IN"; break;
+			case Net::Purpose::OUT: purpose = "OUT"; break;
+			case Net::Purpose::REG: purpose = "REG"; break;
+			case Net::Purpose::COND: purpose = "COND"; break;
+			case Net::Purpose::NONE:
+			default: purpose = "NONE";
+		}
+    return os << "Net(name:" << net.name
+              << ", purpose:"  << purpose
+              << ", type:" << net.type << ")";
 }
+
+/*
+bool operator==(const Net &n1, const Net &n2) {
+    return n1.name == n2.name &&
+           n1.type == n2.type &&
+           n1.purpose == n2.purpose;
+}
+
+bool operator!=(const Net &n1, const Net &n2) {
+    return !(n1 == n2);
+}
+*/
+
 
 Condition::Condition() {
 	this->uid = -1;
@@ -325,5 +354,7 @@ bool operator==(const Func &f1, const Func &f2) {
 bool operator!=(const Func &f1, const Func &f2) {
 	return !(f1 == f2);
 }
+
+
 
 }

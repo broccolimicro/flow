@@ -35,17 +35,23 @@ bool isProbeCall(const Operation &o) {
 		&& (o.operands[0].cnst.sval == "probe");
 }
 
-bool isBooleanOperation(const Operation::OpType &op) {
-	return op == Operation::OpType::BOOLEAN_AND
-		|| op == Operation::OpType::BOOLEAN_OR
-		|| op == Operation::OpType::BOOLEAN_XOR
-		|| op == Operation::OpType::BOOLEAN_NOT
-		|| op == Operation::OpType::EQUAL
-		|| op == Operation::OpType::NOT_EQUAL
-		|| op == Operation::OpType::LESS
-		|| op == Operation::OpType::GREATER
-		|| op == Operation::OpType::LESS_EQUAL
-		|| op == Operation::OpType::GREATER_EQUAL;
+bool isBooleanOperation(const Operation &operation) {
+	switch (operation.func) {
+		case Operation::OpType::BOOLEAN_AND:
+		case Operation::OpType::BOOLEAN_OR:
+		case Operation::OpType::BOOLEAN_XOR:
+		case Operation::OpType::BOOLEAN_NOT:
+		// Operators below don't _require_ boolean operands
+		//case Operation::OpType::EQUAL:
+		//case Operation::OpType::NOT_EQUAL:
+		//case Operation::OpType::LESS:
+		//case Operation::OpType::GREATER:
+		//case Operation::OpType::LESS_EQUAL:
+		//case Operation::OpType::GREATER_EQUAL:
+			return true;
+		default:
+			return false;
+	}
 }
 
 
@@ -70,6 +76,7 @@ Expression synthesizeExpressionProbes(const Expression &e, const mapping &Channe
 
 	size_t subexpr_count = e.sub.size();
 	if (subexpr_count == 0) {
+		//cout << ">>>>>>>>>>> early, no probes <<<<<<<<<<<" << endl;
 		return e;
 
 	} else if (subexpr_count == 1) {
@@ -78,12 +85,12 @@ Expression synthesizeExpressionProbes(const Expression &e, const mapping &Channe
 		if (!isProbeCall(operation)) { return e; }
 
 		size_t channel_idx = 0;
-		size_t channel_data = ChannelToData.map(channel_idx);
+		//size_t channel_data = ChannelToData.map(channel_idx);
 		size_t channel_valid = ChannelToValid.map(channel_idx);
 		cout << "probe channel v" << channel_idx << " [v:" << channel_valid << ",d:" << channel_data << "]" << endl;
 		emplaceProbe(0, channel_valid);
 
-		cout << ">>>>>>>>>>>early<<<<<<<<<<<" << endl;
+		//cout << ">>>>>>>>>>> early, expr is just 1 probe <<<<<<<<<<<" << endl;
 		result.minimize();
 		return result;
 	}
