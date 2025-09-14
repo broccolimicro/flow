@@ -55,7 +55,7 @@ bool isBooleanOperation(const Operation &operation) {
 }
 
 
-Expression synthesizeExpressionProbes(const Expression &e, const mapping &ChannelToValid, const mapping &ChannelToData) {
+Expression synthesizeExpressionProbes(const Expression &e, const Mapping<int> &ChannelToValid, const Mapping<int> &ChannelToData) {
 	cout << endl << endl << "<<<<<<<<<<<>>>>>>>>>>>" << endl;
 	Expression result(e);
 
@@ -266,9 +266,9 @@ clocked::Module synthesizeModuleFromFunc(const Func &func) {
 	clocked::Block &always = mod.blocks.back();
 
 	// Map flow nets to valid-ready channels
-	mapping funcNetToChannelData;
-	mapping funcNetToChannelValid;
-	mapping funcNetToChannelReady;
+	Mapping<int> funcNetToChannelData(-1, true);
+	Mapping<int> funcNetToChannelValid(-1, true);
+	Mapping<int> funcNetToChannelReady(-1, true);
 	//TODO: set<int> internalRegisters; ???
 
 	for (int netIdx = 0; netIdx < (int)func.nets.size(); netIdx++) {
@@ -332,7 +332,7 @@ clocked::Module synthesizeModuleFromFunc(const Func &func) {
 
 			// Assign to internal-memory registers
 			int mod_data_net = funcNetToChannelData.map(condRegIt->first);
-			internalRegAssignment.apply(funcNetToChannelData); 
+			internalRegAssignment.applyVars(funcNetToChannelData); 
 			branch_rule.assign.push_back(clocked::Assign(mod_data_net, internalRegAssignment));
 		}
 
@@ -350,16 +350,16 @@ clocked::Module synthesizeModuleFromFunc(const Func &func) {
 			int mod_data_net = funcNetToChannelData.map(condOutputIt->first);
 
 			// Assign to outputs
-			request.apply(funcNetToChannelData);
+			request.applyVars(funcNetToChannelData);
 			branch_rule.assign.push_back(clocked::Assign(mod_data_net, request));
 
 			// only when all output channels are ready to be written to
 			int mod_valid_net = funcNetToChannelValid.map(condOutputIt->first);
-			if (mod_valid_net != -1) {  // flow::Net::Purpose::REG don't have valid/ready signals over channel
+			if (mod_valid_net != funcNetToChannelValid.undef) {  // flow::Net::Purpose::REG don't have valid/ready signals over channel
 				branch_rule.assign.push_back(clocked::Assign(mod_valid_net, Expression::intOf(1)));
 
 				int mod_ready_net = funcNetToChannelReady.map(condOutputIt->first);
-				if (mod_ready_net != -1) {  // flow::Net::Purpose::REG don't have valid/ready signals over channel
+				if (mod_ready_net != funcNetToChannelReady.undef) {  // flow::Net::Purpose::REG don't have valid/ready signals over channel
 					branch_ready = branch_ready & (
 							~Expression::varOf(mod_valid_net)
 							| Expression::varOf(mod_ready_net));
@@ -370,7 +370,7 @@ clocked::Module synthesizeModuleFromFunc(const Func &func) {
 
 		//branch_ready.minimize();
 		for (int mod_valid_net : clocked_nets_that_branch_needs_to_be_valid) {
-			if (mod_valid_net != -1) {  // flow::Net::Purpose::REG don't have valid/ready signals over channel
+			if (mod_valid_net != funcNetToChannelValid.undef) {  // flow::Net::Purpose::REG don't have valid/ready signals over channel
 				branch_ready = branch_ready & Expression::varOf(mod_valid_net);
 			}
 		}

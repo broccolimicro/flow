@@ -316,7 +316,7 @@ TEST(ModuleSynthesis, ChannelProbes) {
 	Expression expr_B_data(B_data);
 	Expression expr_x_data(x_data);
 
-	mapping ChannelValid, ChannelData;
+	Mapping<int> ChannelValid(-1, true), ChannelData(-1, true);
 	ChannelValid.set(A.index, A_valid.index);
 	ChannelValid.set(B.index, B_valid.index);
 	ChannelData.set(A.index, A_data.index);
