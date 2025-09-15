@@ -279,6 +279,72 @@ TEST(ModuleSynthesis, DSAdderFlat) {
 	EXPECT_SUBSTRING(verilog, "ci_data <= (Ad_data+Bd_data+ci_data)/65536;");
 }
 
+auto get_channel_probe = [](arithmetic::Operand &operand) {
+	vector<arithmetic::Operand> probe_args = { arithmetic::Operand::stringOf("probe"), operand };
+	return Expression(arithmetic::Operation::CALL, probe_args);
+};
+
+TEST(ModuleSynthesis, Probes) {
+	Func func;
+	func.name = "ds_adder_flat";
+	Operand Ad = func.pushNet("Ad", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand Ac = func.pushNet("Ac", Type(Type::TypeName::FIXED, 1),			flow::Net::IN);
+	Operand Bd = func.pushNet("Bd", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand Bc = func.pushNet("Bc", Type(Type::TypeName::FIXED, 1),			flow::Net::IN);
+	Operand Sd = func.pushNet("Sd", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
+	Operand Sc = func.pushNet("Sc", Type(Type::TypeName::FIXED, 1),			flow::Net::OUT);
+	Operand ci = func.pushNet("ci", Type(Type::TypeName::FIXED, 1),			flow::Net::REG);
+	Expression expr_Ac(Ac);
+	Expression expr_Ad(Ad);
+	Expression expr_Bc(Bc);
+	Expression expr_Bd(Bd);
+	Expression expr_ci(ci);
+
+	Expression probe_Ac = get_channel_probe(Ac);
+	Expression probe_Bc = get_channel_probe(Bc);
+	Expression probe_Ad = get_channel_probe(Ad);
+	Expression probe_Bd = get_channel_probe(Bd);
+	//Expression probe_Bd(arithmetic::Operation::CALL, {probe, Bd});
+
+	Expression expr_s((probe_Ad + probe_Bd + expr_ci) % pow(2, WIDTH));
+	Expression expr_co((probe_Ad + probe_Bd + expr_ci) / pow(2, WIDTH));
+
+	int branch0 = func.pushCond(~probe_Ac & ~probe_Bc);
+	func.conds[branch0].req(Sd, expr_s);
+	func.conds[branch0].req(Sc, Expression::intOf(0));
+	func.conds[branch0].mem(ci, expr_co);
+	func.conds[branch0].ack({Ac, Ad, Bc, Bd});
+
+	int branch1 = func.pushCond(probe_Ac & ~probe_Bc);
+	func.conds[branch1].req(Sd, expr_s);
+	func.conds[branch1].req(Sc, Expression::intOf(0));
+	func.conds[branch1].mem(ci, expr_co);
+	func.conds[branch1].ack({Bc, Bd});
+
+	int branch2 = func.pushCond(~probe_Ac & probe_Bc);
+	func.conds[branch2].req(Sd, expr_s);
+	func.conds[branch2].req(Sc, Expression::intOf(0));
+	func.conds[branch2].mem(ci, expr_co);
+	func.conds[branch2].ack({Ac, Ad});
+
+	int branch3 = func.pushCond(probe_Ac & probe_Bc & (expr_co != expr_ci));
+	func.conds[branch3].req(Sd, expr_s);
+	func.conds[branch3].req(Sc, Expression::intOf(0));
+	func.conds[branch3].mem(ci, expr_co);
+
+	int branch4 = func.pushCond(probe_Ac & probe_Bc & (expr_co == expr_ci));
+	func.conds[branch4].req(Sd, expr_s);
+	func.conds[branch4].req(Sc, Expression::intOf(1));
+	func.conds[branch4].mem(ci, Expression::intOf(0));
+	func.conds[branch4].ack({Ac, Ad, Bc, Bd});
+
+	string verilog = synthesizeVerilogFromFunc(func).to_string();
+	EXPECT_SUBSTRING(verilog, "Sc_state <= 0;");
+	EXPECT_SUBSTRING(verilog, "Sc_state <= 1;");
+	EXPECT_SUBSTRING(verilog, "Sd_state <= (Ad_data+Bd_data+ci_data)%65536;");
+	EXPECT_SUBSTRING(verilog, "ci_data <= (Ad_data+Bd_data+ci_data)/65536;");
+}
+
 /*
 TEST(ModuleSynthesis, FullAdder) {
 	Func func;
@@ -302,10 +368,7 @@ TEST(ModuleSynthesis, FullAdder) {
 }
 */
 
-//auto get_channel_probe = [](arithmetic::Operand &operand) {
-//	vector<arithmetic::Operand> probe_args = { arithmetic::Operand::stringOf("probe"), operand };
-//	return Expression(arithmetic::Operation::CALL, probe_args);
-//};
+
 
 
 
@@ -344,7 +407,7 @@ TEST(ModuleSynthesis, ChannelProbes) {
 	Expression probe_B = arithmetic::call("probe", {B});
 
 	// Base case
-	Expression valid_before = probe_A;
+	Expression valid_before = isValid(probe_A);
 	Expression valid_target = expr_A_valid;
 	valid_target.minimize();
 	Expression valid_after = synthesizeExpressionProbes(valid_before, ChannelValid, ChannelData);
@@ -353,6 +416,19 @@ TEST(ModuleSynthesis, ChannelProbes) {
 		<< endl << "BEFORE: " << valid_before
 		<< endl << "AFTER: " << valid_after
 		<< endl << "TARGET: " << valid_target;
+
+	// Base case
+	Expression valid2_before = probe_A;
+	Expression valid2_target = expr_A_data;
+	valid2_target.minimize();
+	Expression valid2_after = synthesizeExpressionProbes(valid2_before, ChannelValid, ChannelData);
+
+	EXPECT_TRUE(areSame(valid2_after, valid2_target))
+		<< endl << "BEFORE: " << valid2_before
+		<< endl << "AFTER: " << valid2_after
+		<< endl << "TARGET: " << valid2_target;
+
+
 
 	Expression zero = Expression::intOf(0);
 	Expression data_before = (probe_A == zero);
@@ -371,8 +447,21 @@ TEST(ModuleSynthesis, ChannelProbes) {
 	// (A & 0xF7) + 1
 	Expression f7 = Expression::intOf(0xf7);
 	Expression one = Expression::intOf(1);
-	Expression ma_before = (probe_A && f7) + one;
-	Expression ma_target = (expr_A_valid & (expr_A_data && f7)) + one;
+	Expression ma2_before = (probe_A && f7) + one;
+	Expression ma2_target = (expr_A_data && f7) + one;
+	ma2_target.minimize();
+	Expression ma2_after = synthesizeExpressionProbes(ma2_before, ChannelValid, ChannelData);
+
+	EXPECT_TRUE(areSame(ma2_after, ma2_target))
+		<< endl << "BEFORE: " << ma2_before
+		<< endl << "AFTER: " << ma2_after
+		<< endl << "TARGET: " << ma2_target;
+
+	//// Masked Addition
+	//// "Keep A’s lower byte[-ish] if it’s real, then increment."
+	// (A & 0xF7) + 1
+	Expression ma_before = isValid((probe_A && f7) + one);
+	Expression ma_target = expr_A_valid;
 	ma_target.minimize();
 	Expression ma_after = synthesizeExpressionProbes(ma_before, ChannelValid, ChannelData);
 
@@ -381,11 +470,13 @@ TEST(ModuleSynthesis, ChannelProbes) {
 		<< endl << "AFTER: " << ma_after
 		<< endl << "TARGET: " << ma_target;
 
+
+
 	//// Bitwise Inversion
 	//// "Negate only the known."
 	// ~(A | B)
 	Expression bi_before = ~(probe_A | probe_B);
-	Expression bi_target = ~(expr_A_valid & expr_B_valid & (expr_A_data | expr_B_data));
+	Expression bi_target = ~(expr_A_valid | expr_B_valid);  //TODO: ???
 	bi_target.minimize();
 	Expression bi_after = synthesizeExpressionProbes(bi_before, ChannelValid, ChannelData);
 
@@ -394,12 +485,27 @@ TEST(ModuleSynthesis, ChannelProbes) {
 		<< endl << "AFTER: " << bi_after
 		<< endl << "TARGET: " << bi_target;
 
+	//// Bitwise Inversion 2
+	//// "Negate only the known."
+	// ~(A == 3 | B == 6)
+	Expression three = Expression::intOf(3);
+	Expression six = Expression::intOf(6);
+	Expression bi2_before = ~((probe_A == three) | (probe_B == six));
+	Expression bi2_target = ~((expr_A_valid & (expr_A_data == three)) | (expr_B_valid & (expr_B_data == six)));
+	bi2_target.minimize();
+	Expression bi2_after = synthesizeExpressionProbes(bi2_before, ChannelValid, ChannelData);
+
+	EXPECT_TRUE(areSame(bi2_after, bi2_target))
+		<< endl << "BEFORE: " << bi2_before
+		<< endl << "AFTER: " << bi2_after
+		<< endl << "TARGET: " << bi2_target;
+
 	//// Deep Boolean, Top Arithmetic
 	//// "The logic part is fragile; Z is solid."
 	// ((A < 3) && (B > 2)) + B
-	Expression dbta_before = ((probe_A < 3) && (probe_B > 2)) + probe_B;
+	Expression dbta_before = (((probe_A + probe_B) < 3) & (probe_B > 2)) | probe_B;
 	//Expression dbta_target = ((expr_A_valid && (expr_A_data < 3)) && (expr_B_valid && (expr_B_data > 2))) + expr_B_valid;
-	Expression dbta_target = expr_A_valid & expr_B_valid & (((expr_A_data < 3) && (expr_B_data > 2)) + expr_B_data);
+	Expression dbta_target = (expr_A_valid & expr_B_valid & (((expr_A_data + expr_B_data) < 3) & (expr_B_data > 2))) | expr_B_valid;
 	dbta_target.minimize();
 	Expression dbta_after = synthesizeExpressionProbes(dbta_before, ChannelValid, ChannelData);
 
