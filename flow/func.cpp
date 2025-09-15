@@ -85,7 +85,7 @@ Condition::~Condition() {
 
 std::ostream& operator<<(std::ostream& os, const Condition& cond) {
 	os << "Condition(uid: " << cond.uid << ", "
-		<< "valid: {" << endl << cond.valid.to_string() << endl << "}";
+		<< "valid: { " << cond.valid.to_string() << "}";
 
 	os << endl << "==>  ins: [";
 	for (size_t i = 0; i < cond.ins.size(); ++i) {
@@ -94,19 +94,20 @@ std::ostream& operator<<(std::ostream& os, const Condition& cond) {
 	}
 	os << "]" << endl;
 
-	os << endl << "==>  outs: [" << endl;
-	for (size_t i = 0; i < cond.outs.size(); ++i) {
+	os << "==>  regs: [" << endl;
+	for (size_t i = 0; i < cond.regs.size(); ++i) {
 		if (i > 0) { os << "," << endl; }
-		os << "<" << cond.outs[i].first << ">{" << endl << cond.outs[i].second.to_string() << endl << "}";
+		os << "\t<" << cond.regs[i].first << ">{ " << cond.regs[i].second.to_string() << " }";
 	}
 	os << "]" << endl;
 
-	os << endl << "==>  regs: [" << endl;
-	for (size_t i = 0; i < cond.regs.size(); ++i) {
+	os << "==>  outs: [" << endl;
+	for (size_t i = 0; i < cond.outs.size(); ++i) {
 		if (i > 0) { os << "," << endl; }
-		os << "<" << cond.regs[i].first << ">{" << endl << cond.regs[i].second.to_string() << endl << "}";
+		os << "\t<" << cond.outs[i].first << ">{ " << cond.outs[i].second.to_string() << " }";
 	}
 	os << "]";
+
 	return os;
 }
 
