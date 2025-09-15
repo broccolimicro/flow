@@ -9,7 +9,8 @@
 #include <flow/func.h>
 #include <flow/module.h>
 #include <flow/synthesize.h>
-#include <interpret_flow/export.h>
+#include <interpret_flow/export_dot.h>
+#include <interpret_flow/export_verilog.h>
 
 #define EXPECT_SUBSTRING(source, substring) \
     EXPECT_NE((source).find(substring), std::string::npos) \
@@ -26,11 +27,29 @@ using arithmetic::Operation;
 using arithmetic::Operand;
 using namespace flow;
 
-//const int WIDTH = 16;
+const size_t WIDTH = 16;
 const std::filesystem::path TEST_DIR = absolute(current_path() / "tests");
 
 
 parse_verilog::module_def synthesizeVerilogFromFunc(const Func &func) {
+	string filenameWithoutExtension = (TEST_DIR / func.name).string();
+	// Render flow diagram
+	{
+		string graphvizRaw = flow::export_func(func, false).to_string();
+
+		string flow_filename = filenameWithoutExtension + ".dot";
+		std::ofstream export_file(flow_filename);
+		if (!export_file) {
+			std::cerr << "ERROR: Failed to open file for dot export: "
+				<< flow_filename << std::endl
+				<< "ERROR: Try again from dir: <project_dir>/lib/flow" << std::endl;
+			//TODO: we want soft failure, but this doesn't break or prevent file writing
+		}
+		export_file << graphvizRaw;
+		//gvdot::render(filenameWithoutExtension + ".png", graphvizRaw);
+	}
+
+	// Test synthesis
 	clocked::Module mod = synthesizeModuleFromFunc(func);
 	parse_verilog::module_def mod_v = export_module(mod);
 	string verilog = mod_v.to_string();
@@ -45,8 +64,8 @@ parse_verilog::module_def synthesizeVerilogFromFunc(const Func &func) {
 		}
 		export_file << data;
 	};
-	string export_filename = (TEST_DIR / (func.name + ".v")).string();
-	EXPECT_NO_THROW(write_verilog_file(verilog, export_filename));
+	string verilog_filename = filenameWithoutExtension + ".v";
+	EXPECT_NO_THROW(write_verilog_file(verilog, verilog_filename));
 
 	// Validate branches
 	size_t branch_count = func.conds.size();
@@ -63,7 +82,6 @@ parse_verilog::module_def synthesizeVerilogFromFunc(const Func &func) {
 	return mod_v;
 }
 
-/*
 TEST(ModuleSynthesis, Source) {
 	Func func;
 	func.name = "source";
@@ -140,6 +158,29 @@ TEST(ModuleSynthesis, Func) {
 	EXPECT_NO_SUBSTRING(verilog, "R_state <= L0_data||L1_data;");
 }
 
+TEST(ModuleSynthesis, Split) {
+	Func func;
+	func.name = "split";
+	Operand L = func.pushNet("L", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand C = func.pushNet("C", Type(Type::TypeName::FIXED, 1), flow::Net::IN);
+	Operand R0 = func.pushNet("R0", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
+	Operand R1 = func.pushNet("R1", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
+	Expression exprL(L);
+	Expression exprC(C);
+
+	int branch0 = func.pushCond(exprC == Expression::intOf(0));
+	func.conds[branch0].req(R0, exprL);
+	func.conds[branch0].ack({C, L});
+
+	int branch1 = func.pushCond(exprC == Expression::intOf(1));
+	func.conds[branch1].req(R1, exprL);
+	func.conds[branch1].ack({C, L});
+
+	string verilog = synthesizeVerilogFromFunc(func).to_string();
+	EXPECT_SUBSTRING(verilog, "R0_state <= L_data;");
+	EXPECT_SUBSTRING(verilog, "R1_state <= L_data;");
+}
+
 TEST(ModuleSynthesis, Merge) {
 	Func func;
 	func.name = "merge";
@@ -164,29 +205,6 @@ TEST(ModuleSynthesis, Merge) {
 	EXPECT_SUBSTRING(verilog, "R_state <= L1_data;");
 }
 
-TEST(ModuleSynthesis, Split) {
-	Func func;
-	func.name = "split";
-	Operand L = func.pushNet("L", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
-	Operand C = func.pushNet("C", Type(Type::TypeName::FIXED, 1), flow::Net::IN);
-	Operand R0 = func.pushNet("R0", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
-	Operand R1 = func.pushNet("R1", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
-	Expression exprL(L);
-	Expression exprC(C);
-
-	int branch0 = func.pushCond(exprC == Expression::intOf(0));
-	func.conds[branch0].req(R0, exprL);
-	func.conds[branch0].ack({C, L});
-
-	int branch1 = func.pushCond(exprC == Expression::intOf(1));
-	func.conds[branch1].req(R1, exprL);
-	func.conds[branch1].ack({C, L});
-
-	string verilog = synthesizeVerilogFromFunc(func).to_string();
-	EXPECT_SUBSTRING(verilog, "R0_state <= L_data;");
-	EXPECT_SUBSTRING(verilog, "R1_state <= L_data;");
-}
-
 TEST(ModuleSynthesis, StreamingAdder) {
 	Func func;
 	func.name = "s_adder";
@@ -205,9 +223,8 @@ TEST(ModuleSynthesis, StreamingAdder) {
 	EXPECT_SUBSTRING(verilog, "R_state <= L_data+m_data;");
 	EXPECT_SUBSTRING(verilog, "m_data <= L_data;");
 }
-*/
 
-TEST(ExportTest, DSAdderFlat) {
+TEST(ModuleSynthesis, DSAdderFlat) {
 	Func func;
 	func.name = "ds_adder_flat";
 	Operand Ad = func.pushNet("Ad", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
