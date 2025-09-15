@@ -56,7 +56,7 @@ bool isBooleanOperation(const Operation &operation) {
 
 
 Expression synthesizeExpressionProbes(const Expression &e, const Mapping<size_t> &ChannelToValid, const Mapping<size_t> &ChannelToData) {
-	cout << endl << endl << "<<<<<<<<<<<>>>>>>>>>>>" << endl;
+	//cout << endl << endl << "<<<<<<<<<<<>>>>>>>>>>>" << endl;
 	Expression result(e);
 
 	//TODO: verify that we're only substituting channel references, not local vars (if mistakenly probed)
@@ -68,7 +68,7 @@ Expression synthesizeExpressionProbes(const Expression &e, const Mapping<size_t>
 	//);
 
 	auto emplaceProbe = [&](size_t parent_expr_operation_idx, size_t channel_idx) {
-		cout << " ~ ~ emplace: e" << parent_expr_operation_idx << " <- v" << channel_idx << " ~ ~" << endl;
+		//cout << " ~ ~ emplace: e" << parent_expr_operation_idx << " <- v" << channel_idx << " ~ ~" << endl;
 		Operation substitution(Operation::OpType::IDENTITY, {Operand::varOf(channel_idx)});
 		substitution.exprIndex = parent_expr_operation_idx;
 		result.sub.setExpr(substitution);
@@ -85,9 +85,9 @@ Expression synthesizeExpressionProbes(const Expression &e, const Mapping<size_t>
 		if (!isProbeCall(operation)) { return e; }
 
 		size_t channel_idx = 0;
-		size_t channel_data = ChannelToData.map(channel_idx);
+		//size_t channel_data = ChannelToData.map(channel_idx);
 		size_t channel_valid = ChannelToValid.map(channel_idx);
-		cout << "probe channel v" << channel_idx << " [v:" << channel_valid << ",d:" << channel_data << "]" << endl;
+		//cout << "probe channel v" << channel_idx << " [v:" << channel_valid << ",d:" << channel_data << "]" << endl;
 		emplaceProbe(0, channel_valid);
 
 		//cout << ">>>>>>>>>>> early, expr is just 1 probe <<<<<<<<<<<" << endl;
@@ -95,22 +95,22 @@ Expression synthesizeExpressionProbes(const Expression &e, const Mapping<size_t>
 		return result;
 	}
 
-	cout << "Post-order DFS:" << endl;
+	//cout << "Post-order DFS:" << endl;
 	vector<Operation> child_probes;
 	for (arithmetic::PostOrderDFSIterator operation_it(e.sub, {e.top}); !operation_it.done(); ++operation_it) {
 		const Operation &operation = *operation_it;
-		cout << "==> e" << operation.exprIndex;
+		//cout << "==> e" << operation.exprIndex;
 
 		// Descend down to all probe() calls
 		if (isProbeCall(operation)) {
-			cout << endl;
+			//cout << endl;
 			child_probes.push_back(operation);
 			continue;
 		}
 
 		// New, lower "or" ceiling?
 		if (operation.func == Operation::OpType::BOOLEAN_OR) {
-			cout << "!!" << endl;
+			//cout << "!!" << endl;
 			size_t parent_operation_idx = operation.exprIndex;
 			Operation parent_operation = *e.getExpr(parent_operation_idx);
 
@@ -123,9 +123,9 @@ Expression synthesizeExpressionProbes(const Expression &e, const Mapping<size_t>
 				size_t channel_idx = probe_operation.operands[1].index;
 				size_t channel_data = ChannelToData.map(channel_idx);
 				size_t channel_valid = ChannelToValid.map(channel_idx);
-				cout << "  \\___> " << child_operation_idx << endl;
-				cout << "probe channel v" << channel_idx << " [v:" << channel_valid << ",d:" << channel_data << "]" << endl;
-				cout << "       parent e" << parent_operation_idx << endl;
+				//cout << "  \\___> " << child_operation_idx << endl;
+				//cout << "probe channel v" << channel_idx << " [v:" << channel_valid << ",d:" << channel_data << "]" << endl;
+				//cout << "       parent e" << parent_operation_idx << endl;
 
 				emplaceProbe(child_operation_idx, channel_data);
 				new_parent_operands.insert(new_parent_operands.begin(), Operand::varOf(channel_valid));
@@ -140,13 +140,13 @@ Expression synthesizeExpressionProbes(const Expression &e, const Mapping<size_t>
 
 		//TODO: when backtracking, pop off ceiling
 		//cout << valid_regions.back() << endl;
-		cout << endl;
+		//cout << endl;
 	}
 
 	//TODO: extract base case para merge two near-identical substitutions 
 	// Synthesize leftover probes not nested within any BOOLEAN_OR
 	if (!child_probes.empty()) {
-		cout << endl << "...nobody's kids?" << endl;
+		//cout << endl << "...nobody's kids?" << endl;
 		size_t parent_operation_idx = e.top.index;  //TODO: e.sub.getExpr(e.top.index); ??
 		Operation parent_operation = *e.getExpr(parent_operation_idx);
 
@@ -159,9 +159,9 @@ Expression synthesizeExpressionProbes(const Expression &e, const Mapping<size_t>
 			size_t channel_idx = probe_operation.operands[1].index;
 			size_t channel_data = ChannelToData.map(channel_idx);
 			size_t channel_valid = ChannelToValid.map(channel_idx);
-			cout << "  \\___> " << child_operation_idx << endl;
-			cout << "probe channel v" << channel_idx << " [v:" << channel_valid << ",d:" << channel_data << "]" << endl;
-			cout << "       parent e" << parent_operation_idx << endl;
+			//cout << "  \\___> " << child_operation_idx << endl;
+			//cout << "probe channel v" << channel_idx << " [v:" << channel_valid << ",d:" << channel_data << "]" << endl;
+			//cout << "       parent e" << parent_operation_idx << endl;
 
 			// Base case: top IS probe() call
 			if (parent_operation_idx == child_operation_idx) {
@@ -179,10 +179,10 @@ Expression synthesizeExpressionProbes(const Expression &e, const Mapping<size_t>
 		result.sub.setExpr(parent_expr_only_when_valid);
 	}
 
-	cout << endl << "><><<>><><<>><><<>><><" << endl;
-	cout << "PRE-MINIMIZE:" << endl;
-	cout << result.to_string();
-	cout << ">>>>>>>>>>><<<<<<<<<<<" << endl;
+	//cout << endl << "><><<>><><<>><><<>><><" << endl;
+	//cout << "PRE-MINIMIZE:" << endl;
+	//cout << result.to_string();
+	//cout << ">>>>>>>>>>><<<<<<<<<<<" << endl;
 
 	result.minimize();
 	//result.tidy();
@@ -220,7 +220,7 @@ void synthesizeChannel(clocked::Module &mod, const Net &net) {
 
 		size_t debug_wire = mod.pushNet("__"+net.name+"_ok", wire, clocked::Net::Purpose::WIRE);
 		mod.assign.push_back(clocked::Assign(debug_wire, arithmetic::ident(
-						~Expression::varOf(channel.valid) | Expression::varOf(channel.ready)), true));
+						~Expression::varOf(channel.valid) || Expression::varOf(channel.ready)), true));
 
 	} else if (net.purpose == flow::Net::Purpose::REG) {
 		channel.valid = -1;  //mod.pushNet(net.name+"_valid", wire, clocked::Net::Purpose::WIRE);
@@ -287,9 +287,9 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 		branch_rule.assign.push_back(clocked::Assign(branch_id_reg, Expression::intOf(branch_id)));
 
 		Expression predicate = condIt->valid;
-		//predicate = isValid(predicate);  //TODO: ensure this is used for condition predicates & not body expressions during synthesis (& that our synthesizeExpressionProbes probe tests include this assumption)
-		predicate = synthesizeExpressionProbes(predicate, funcNetToChannelValid, funcNetToChannelData);
-		//predicate.minimize();
+		predicate.minimize();
+		predicate.apply(funcNetToChannelData);
+		//predicate = synthesizeExpressionProbes(predicate, funcNetToChannelValid, funcNetToChannelData);
 
 		//
 		// Assemble branch_ready expression for only when all conditions are met
@@ -303,25 +303,25 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 			//size_t func_net = funcNetToChannelData.unmap(net);  //decode mapping applied beforehand
 			size_t mod_valid_net = funcNetToChannelValid.map(net);
 			clocked_nets_that_branch_needs_to_be_valid.insert(mod_valid_net);
-			//cout << "==(var in predicate expr)> " << mod_valid_net << endl;
+			if (debug) { cout << "==(var in predicate expr)> " << mod_valid_net << endl; }
 		}
 
 		// only when all input channels, who need acknowledgement, are valid
 		for (auto condInputIt = condIt->ins.begin(); condInputIt != condIt->ins.end(); condInputIt++) {
 			size_t mod_valid_net = funcNetToChannelValid.map(*condInputIt);
 			clocked_nets_that_branch_needs_to_be_valid.insert(mod_valid_net); //TODO: must ack's be valid?
-			//cout << "==(var to ack)> " << mod_valid_net << endl;
+			if (debug) { cout << "==(var to ack)> " << mod_valid_net << endl; }
 		}
 
 		for (auto condRegIt = condIt->regs.begin(); condRegIt != condIt->regs.end(); condRegIt++) {
 			Expression internalRegAssignment(condRegIt->second);
-			//internalRegAssignment.minimize();
+			internalRegAssignment.minimize();
 
 			// only when [input?] channels referenced in internal-memory assignments are valid
 			for (size_t net : getNetsInExpression(internalRegAssignment)) {
 				size_t mod_valid_net = funcNetToChannelValid.map(net);
 				clocked_nets_that_branch_needs_to_be_valid.insert(mod_valid_net);
-				//cout << "==(var in mem expr)> " << mod_valid_net << endl;
+				if (debug) { cout << "==(var in mem expr)> " << mod_valid_net << endl; }
 			}
 
 			// Assign to internal-memory registers
@@ -332,13 +332,13 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 
 		for (auto condOutputIt = condIt->outs.begin(); condOutputIt != condIt->outs.end(); condOutputIt++) {
 			Expression request = condOutputIt->second;
-			//request.minimize();
+			request.minimize();
 
 			//only when [input?] channels referenced in requests to be sent are valid
 			for (size_t net : getNetsInExpression(request)) {
 				size_t mod_valid_net = funcNetToChannelValid.map(net);
 				clocked_nets_that_branch_needs_to_be_valid.insert(mod_valid_net);
-				//cout << "==(var in req expr)> " << mod_valid_net << endl;
+				if (debug) { cout << "==(var in req expr)> " << mod_valid_net << endl; }
 			}
 
 			size_t mod_data_net = funcNetToChannelData.map(condOutputIt->first);
@@ -354,9 +354,9 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 
 				size_t mod_ready_net = funcNetToChannelReady.map(condOutputIt->first);
 				if (mod_ready_net != funcNetToChannelReady.undef) {  // flow::Net::Purpose::REG don't have valid/ready signals over channel
-					branch_ready = branch_ready & (
+					branch_ready = branch_ready && (
 							~Expression::varOf(mod_valid_net)
-							| Expression::varOf(mod_ready_net));
+							|| Expression::varOf(mod_ready_net));
 				}
 			}
 			// ...either they're open (!valid) or _will be_ open next cycle (ready)
@@ -365,17 +365,20 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 		//branch_ready.minimize();
 		for (size_t mod_valid_net : clocked_nets_that_branch_needs_to_be_valid) {
 			if (mod_valid_net != funcNetToChannelValid.undef) {  // flow::Net::Purpose::REG don't have valid/ready signals over channel
-				branch_ready = branch_ready & Expression::varOf(mod_valid_net);
+				branch_ready = branch_ready && Expression::varOf(mod_valid_net);
 			}
 		}
 
-		branch_rule.guard = arithmetic::ident(predicate) & branch_ready;
+		//TODO: prune this default value until a smarter minimize() handles this (see Expression tests)
+		if (branch_ready.size() > 1) { cout << " _<^>_<^>_<^>_<^>_<^>_<^> TODO: " << branch_ready.to_string(true) << endl; } //branch_ready.eraseExpr(0); }
+
+		branch_rule.guard = arithmetic::ident(predicate) && branch_ready;
 		branch_rule.guard.minimize();
 		always.rules.push_back(branch_rule);
 
 		// Ensure only this branch executes until transaction is complete
 		Expression branch_selector = arithmetic::ident(Expression::varOf(branch_id_reg) == Expression::intOf(branch_id));
-		branch_ready = branch_selector & branch_ready;
+		branch_ready = branch_selector && branch_ready;
 		branch_ready.minimize();
 		mod.assign.push_back(clocked::Assign(mod.chans[condIt->uid].ready, branch_ready, true));
 
@@ -393,14 +396,14 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 				for (auto condInputIt = condIt->ins.begin(); condInputIt != condIt->ins.end(); condInputIt++) {
 					if (*condInputIt == netIdx) {
 						//size_t mod_valid_net = funcNetToChannelValid.map(condIt->uid);
-						//chan_nvalid = chan_nvalid & ~Expression::varOf(mod.chans[condIt->uid].valid);
+						//chan_nvalid = chan_nvalid && ~Expression::varOf(mod.chans[condIt->uid].valid);
 						size_t mod_ready_net = funcNetToChannelReady.map(condIt->uid);
-						chan_ready = chan_ready | Expression::varOf(mod_ready_net);
+						chan_ready = chan_ready || Expression::varOf(mod_ready_net);
 					}
 				}
 			}
 
-			Expression chan_ready_out = chan_ready; //chan_nvalid | chan_ready;
+			Expression chan_ready_out = chan_ready; //chan_nvalid || chan_ready;
 			chan_ready_out.minimize();
 			mod.assign.push_back(clocked::Assign(mod.chans[netIdx].ready, chan_ready_out, true));
 		}
