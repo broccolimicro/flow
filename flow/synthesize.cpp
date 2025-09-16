@@ -288,7 +288,7 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 
 		Expression predicate = condIt->valid;
 		predicate.minimize();
-		predicate.apply(funcNetToChannelData);
+		predicate.applyVars(funcNetToChannelData);
 		//predicate = synthesizeExpressionProbes(predicate, funcNetToChannelValid, funcNetToChannelData);
 
 		//
