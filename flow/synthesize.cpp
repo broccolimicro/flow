@@ -218,9 +218,9 @@ void synthesizeChannel(clocked::Module &mod, const Net &net) {
 		mod.assign.push_back(clocked::Assign(data, Expression::varOf(channel.data), true));
 		always.reset.push_back(clocked::Assign(channel.data, Expression::intOf(0)));
 
-		size_t debug_wire = mod.pushNet("__"+net.name+"_ok", wire, clocked::Net::Purpose::WIRE);
-		mod.assign.push_back(clocked::Assign(debug_wire, arithmetic::ident(
-						~Expression::varOf(channel.valid) || Expression::varOf(channel.ready)), true));
+		size_t enable = mod.pushNet(net.name+"_enable", wire, clocked::Net::Purpose::WIRE);
+		mod.assign.push_back(clocked::Assign(enable, arithmetic::ident(
+						!Expression::varOf(channel.valid) || Expression::varOf(channel.ready)), true));
 
 	} else if (net.purpose == flow::Net::Purpose::REG) {
 		channel.valid = -1;  //mod.pushNet(net.name+"_valid", wire, clocked::Net::Purpose::WIRE);
