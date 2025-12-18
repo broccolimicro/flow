@@ -69,13 +69,13 @@ parse_verilog::module_def synthesizeVerilogFromFunc(const Func &func) {
 
 	// Validate branches
 	size_t branch_count = func.conds.size();
-	int branch_reg_width = std::bit_width(branch_count) - 1;
+	size_t branch_reg_width = std::bit_width(branch_count) - 1;
 	if (branch_count > 2) {
 		EXPECT_SUBSTRING(verilog, "reg [" + std::to_string(branch_reg_width) + ":0] branch_id;");
 	} else {
 		EXPECT_SUBSTRING(verilog, "reg branch_id;");
 	}
-	for (int i = 0; i < branch_count; i++) {
+	for (size_t i = 0; i < branch_count; i++) {
 		EXPECT_SUBSTRING(verilog, "branch_id <= " + std::to_string(i) + ";");
 	}
 
@@ -87,7 +87,7 @@ TEST(ModuleSynthesis, Source) {
 	func.name = "source";
 	Operand R = func.pushNet("R", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
 
-	int branch0 = func.pushCond(Expression::boolOf(true));
+	size_t branch0 = func.pushCond(Expression::boolOf(true));
 	func.conds[branch0].req(R, Expression::intOf(1));  //TODO: send random int?
 
 	string verilog = synthesizeVerilogFromFunc(func).to_string();
@@ -99,7 +99,7 @@ TEST(ModuleSynthesis, Sink) {
 	func.name = "sink";
 	Operand L = func.pushNet("L", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
 
-	int branch0 = func.pushCond(Expression::boolOf(true));
+	size_t branch0 = func.pushCond(Expression::boolOf(true));
 	func.conds[branch0].ack(L);
 
 	string verilog = synthesizeVerilogFromFunc(func).to_string();
@@ -112,7 +112,7 @@ TEST(ModuleSynthesis, Buffer) {
 	Operand R = func.pushNet("R", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
 	Expression exprL(L);
 
-	int branch0 = func.pushCond(Expression::boolOf(true));
+	size_t branch0 = func.pushCond(Expression::boolOf(true));
 	func.conds[branch0].req(R, exprL);
 	func.conds[branch0].ack(L);
 
@@ -128,7 +128,7 @@ TEST(ModuleSynthesis, Copy) {
 	Operand R1 = func.pushNet("R1", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
 	Expression exprL(L);
 
-	int branch0 = func.pushCond(Expression::boolOf(true));
+	size_t branch0 = func.pushCond(Expression::boolOf(true));
 	func.conds[branch0].req(R0, exprL);
 	func.conds[branch0].req(R1, exprL);
 	func.conds[branch0].ack(L);
@@ -147,7 +147,7 @@ TEST(ModuleSynthesis, Func) {
 	Expression exprL0(L0);
 	Expression exprL1(L1);
 
-	int branch0 = func.pushCond(Expression::boolOf(true));
+	size_t branch0 = func.pushCond(Expression::boolOf(true));
 	func.conds[branch0].req(R, exprL0 || exprL1);
 	//TODO: HWAT??? bitwise vs non-bitwise operators actually invert in synthesis!! (see arith::Expr tests, this if expected behavior!?)
 	//func.conds[branch0].mem(m_or, exprL0 || exprL1);
@@ -168,11 +168,11 @@ TEST(ModuleSynthesis, Split) {
 	Expression exprL(L);
 	Expression exprC(C);
 
-	int branch0 = func.pushCond(exprC == Expression::intOf(0));
+	size_t branch0 = func.pushCond(exprC == Expression::intOf(0));
 	func.conds[branch0].req(R0, exprL);
 	func.conds[branch0].ack({C, L});
 
-	int branch1 = func.pushCond(exprC == Expression::intOf(1));
+	size_t branch1 = func.pushCond(exprC == Expression::intOf(1));
 	func.conds[branch1].req(R1, exprL);
 	func.conds[branch1].ack({C, L});
 
@@ -192,11 +192,11 @@ TEST(ModuleSynthesis, Merge) {
 	Expression exprL1(L1);
 	Expression exprC(C);
 
-	int branch0 = func.pushCond(exprC == Expression::intOf(0));
+	size_t branch0 = func.pushCond(exprC == Expression::intOf(0));
 	func.conds[branch0].req(R, exprL0);
 	func.conds[branch0].ack({C, L0});
 
-	int branch1 = func.pushCond(exprC == Expression::intOf(1));
+	size_t branch1 = func.pushCond(exprC == Expression::intOf(1));
 	func.conds[branch1].req(R, exprL1);
 	func.conds[branch1].ack({C, L1});
 
@@ -214,7 +214,7 @@ TEST(ModuleSynthesis, StreamingAdder) {
 	Expression exprL(L);
 	Expression exprm(m);
 
-	int branch0 = func.pushCond(Expression::boolOf(true));
+	size_t branch0 = func.pushCond(Expression::boolOf(true));
 	func.conds[branch0].req(R, exprL + exprm);
 	func.conds[branch0].mem(m, exprL);
 	func.conds[branch0].ack(L);
@@ -243,30 +243,86 @@ TEST(ModuleSynthesis, DSAdderFlat) {
 	Expression expr_s((expr_Ad + expr_Bd + expr_ci) % pow(2, WIDTH));
 	Expression expr_co((expr_Ad + expr_Bd + expr_ci) / pow(2, WIDTH));
 
-	int branch0 = func.pushCond(~expr_Ac & ~expr_Bc);
+	size_t branch0 = func.pushCond(~expr_Ac & ~expr_Bc);
 	func.conds[branch0].req(Sd, expr_s);
 	func.conds[branch0].req(Sc, Expression::intOf(0));
 	func.conds[branch0].mem(ci, expr_co);
 	func.conds[branch0].ack({Ac, Ad, Bc, Bd});
 
-	int branch1 = func.pushCond(expr_Ac & ~expr_Bc);
+	size_t branch1 = func.pushCond(expr_Ac & ~expr_Bc);
 	func.conds[branch1].req(Sd, expr_s);
 	func.conds[branch1].req(Sc, Expression::intOf(0));
 	func.conds[branch1].mem(ci, expr_co);
 	func.conds[branch1].ack({Bc, Bd});
 
-	int branch2 = func.pushCond(~expr_Ac & expr_Bc);
+	size_t branch2 = func.pushCond(~expr_Ac & expr_Bc);
 	func.conds[branch2].req(Sd, expr_s);
 	func.conds[branch2].req(Sc, Expression::intOf(0));
 	func.conds[branch2].mem(ci, expr_co);
 	func.conds[branch2].ack({Ac, Ad});
 
-	int branch3 = func.pushCond(expr_Ac & expr_Bc & (expr_co != expr_ci));
+	size_t branch3 = func.pushCond(expr_Ac & expr_Bc & (expr_co != expr_ci));
 	func.conds[branch3].req(Sd, expr_s);
 	func.conds[branch3].req(Sc, Expression::intOf(0));
 	func.conds[branch3].mem(ci, expr_co);
 
-	int branch4 = func.pushCond(expr_Ac & expr_Bc & (expr_co == expr_ci));
+	size_t branch4 = func.pushCond(expr_Ac & expr_Bc & (expr_co == expr_ci));
+	func.conds[branch4].req(Sd, expr_s);
+	func.conds[branch4].req(Sc, Expression::intOf(1));
+	func.conds[branch4].mem(ci, Expression::intOf(0));
+	func.conds[branch4].ack({Ac, Ad, Bc, Bd});
+
+	string verilog = synthesizeVerilogFromFunc(func).to_string();
+	EXPECT_SUBSTRING(verilog, "Sc_state <= 0;");
+	EXPECT_SUBSTRING(verilog, "Sc_state <= 1;");
+	EXPECT_SUBSTRING(verilog, "Sd_state <= (Ad_data+Bd_data+ci_data)%65536;");
+	EXPECT_SUBSTRING(verilog, "ci_data <= (Ad_data+Bd_data+ci_data)/65536;");
+}
+
+
+TEST(ModuleSynthesis, SerialAdder) {
+	Func func;
+	func.name = "serial_adder";
+	Operand Ad = func.pushNet("Ad", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand Ac = func.pushNet("Ac", Type(Type::TypeName::FIXED, 1),			flow::Net::IN);
+	Operand Bd = func.pushNet("Bd", Type(Type::TypeName::FIXED, WIDTH), flow::Net::IN);
+	Operand Bc = func.pushNet("Bc", Type(Type::TypeName::FIXED, 1),			flow::Net::IN);
+	Operand Sd = func.pushNet("Sd", Type(Type::TypeName::FIXED, WIDTH), flow::Net::OUT);
+	Operand Sc = func.pushNet("Sc", Type(Type::TypeName::FIXED, 1),			flow::Net::OUT);
+	Operand ci = func.pushNet("ci", Type(Type::TypeName::FIXED, 1),			flow::Net::REG);
+	Expression expr_Ac(Ac);
+	Expression expr_Ad(Ad);
+	Expression expr_Bc(Bc);
+	Expression expr_Bd(Bd);
+	Expression expr_ci(ci);
+
+	Expression expr_s((expr_Ad + expr_Bd + expr_ci) % pow(2, WIDTH));
+	Expression expr_co((expr_Ad + expr_Bd + expr_ci) / pow(2, WIDTH));
+
+	size_t branch0 = func.pushCond(~expr_Ac & ~expr_Bc);
+	func.conds[branch0].req(Sd, expr_s);
+	func.conds[branch0].req(Sc, Expression::intOf(0));
+	func.conds[branch0].mem(ci, expr_co);
+	func.conds[branch0].ack({Ac, Ad, Bc, Bd});
+
+	size_t branch1 = func.pushCond(expr_Ac & ~expr_Bc);
+	func.conds[branch1].req(Sd, expr_s);
+	func.conds[branch1].req(Sc, Expression::intOf(0));
+	func.conds[branch1].mem(ci, expr_co);
+	func.conds[branch1].ack({Bc, Bd});
+
+	size_t branch2 = func.pushCond(~expr_Ac & expr_Bc);
+	func.conds[branch2].req(Sd, expr_s);
+	func.conds[branch2].req(Sc, Expression::intOf(0));
+	func.conds[branch2].mem(ci, expr_co);
+	func.conds[branch2].ack({Ac, Ad});
+
+	size_t branch3 = func.pushCond(expr_Ac & expr_Bc & (expr_co != expr_ci));
+	func.conds[branch3].req(Sd, expr_s);
+	func.conds[branch3].req(Sc, Expression::intOf(0));
+	func.conds[branch3].mem(ci, expr_co);
+
+	size_t branch4 = func.pushCond(expr_Ac & expr_Bc & (expr_co == expr_ci));
 	func.conds[branch4].req(Sd, expr_s);
 	func.conds[branch4].req(Sc, Expression::intOf(1));
 	func.conds[branch4].mem(ci, Expression::intOf(0));
@@ -309,30 +365,30 @@ TEST(ModuleSynthesis, Probes) {
 	Expression expr_s((probe_Ad + probe_Bd + expr_ci) % pow(2, WIDTH));
 	Expression expr_co((probe_Ad + probe_Bd + expr_ci) / pow(2, WIDTH));
 
-	int branch0 = func.pushCond(~probe_Ac & ~probe_Bc);
+	size_t branch0 = func.pushCond(~probe_Ac & ~probe_Bc);
 	func.conds[branch0].req(Sd, expr_s);
 	func.conds[branch0].req(Sc, Expression::intOf(0));
 	func.conds[branch0].mem(ci, expr_co);
 	func.conds[branch0].ack({Ac, Ad, Bc, Bd});
 
-	int branch1 = func.pushCond(probe_Ac & ~probe_Bc);
+	size_t branch1 = func.pushCond(probe_Ac & ~probe_Bc);
 	func.conds[branch1].req(Sd, expr_s);
 	func.conds[branch1].req(Sc, Expression::intOf(0));
 	func.conds[branch1].mem(ci, expr_co);
 	func.conds[branch1].ack({Bc, Bd});
 
-	int branch2 = func.pushCond(~probe_Ac & probe_Bc);
+	size_t branch2 = func.pushCond(~probe_Ac & probe_Bc);
 	func.conds[branch2].req(Sd, expr_s);
 	func.conds[branch2].req(Sc, Expression::intOf(0));
 	func.conds[branch2].mem(ci, expr_co);
 	func.conds[branch2].ack({Ac, Ad});
 
-	int branch3 = func.pushCond(probe_Ac & probe_Bc & (expr_co != expr_ci));
+	size_t branch3 = func.pushCond(probe_Ac & probe_Bc & (expr_co != expr_ci));
 	func.conds[branch3].req(Sd, expr_s);
 	func.conds[branch3].req(Sc, Expression::intOf(0));
 	func.conds[branch3].mem(ci, expr_co);
 
-	int branch4 = func.pushCond(probe_Ac & probe_Bc & (expr_co == expr_ci));
+	size_t branch4 = func.pushCond(probe_Ac & probe_Bc & (expr_co == expr_ci));
 	func.conds[branch4].req(Sd, expr_s);
 	func.conds[branch4].req(Sc, Expression::intOf(1));
 	func.conds[branch4].mem(ci, Expression::intOf(0));
@@ -358,7 +414,7 @@ TEST(ModuleSynthesis, FullAdder) {
 	Expression exprB(B);
 	Expression exprCi(Ci);
 
-	int branch0 = func.pushCond(Expression::boolOf(true));
+	size_t branch0 = func.pushCond(Expression::boolOf(true));
 	func.conds[branch0].req(S, bitwiseXor(bitwiseXor(exprA, exprB), exprCi));
 	func.conds[branch0].req(Co, (exprA && exprB) + (exprCi && bitwiseXor(exprA, exprB)));
 	func.conds[branch0].ack({A, B, Ci});
@@ -396,7 +452,7 @@ TEST(ModuleSynthesis, ChannelProbes) {
 	Expression expr_B_data(B_data);
 	Expression expr_x_data(x_data);
 
-	Mapping<int> ChannelValid(-1, true), ChannelData(-1, true);
+	Mapping<size_t> ChannelValid(-1, true), ChannelData(-1, true);
 	ChannelValid.set(A.index, A_valid.index);
 	ChannelValid.set(B.index, B_valid.index);
 	ChannelData.set(A.index, A_data.index);

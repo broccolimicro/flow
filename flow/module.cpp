@@ -2,7 +2,7 @@
 
 namespace clocked {
 
-Type::Type(TypeName type, int width, int shift) {
+Type::Type(TypeName type, size_t width, int shift) {
 	this->type = type;
 	this->width = width;
 	this->shift = shift;
@@ -88,7 +88,7 @@ Block::~Block() {
 }
 
 int Module::netIndex(string name) const {
-	for (int i = 0; i < (int)nets.size(); i++) {
+	for (size_t i = 0; i < (size_t)nets.size(); i++) {
 		if (nets[i].name == name) {
 			return i;
 		}
@@ -98,14 +98,14 @@ int Module::netIndex(string name) const {
 }
 
 int Module::netIndex(string name, bool define) {
-	for (int i = 0; i < (int)nets.size(); i++) {
+	for (size_t i = 0; i < (size_t)nets.size(); i++) {
 		if (nets[i].name == name) {
 			return i;
 		}
 	}
 
 	if (define) {
-		int result = (int)nets.size();
+		size_t result = (size_t)nets.size();
 		nets.push_back(Net(name));
 		return result;
 	}
@@ -121,8 +121,8 @@ int Module::netCount() const {
 	return (int)nets.size();
 }
 
-int Module::pushNet(string name, Type type, Net::Purpose purpose) {
-	int index = (int)nets.size();
+size_t Module::pushNet(string name, Type type, Net::Purpose purpose) {
+	size_t index = (size_t)nets.size();
 	nets.push_back(Net(name, type, purpose));
 	return index;
 }

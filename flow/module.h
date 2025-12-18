@@ -14,16 +14,16 @@ using arithmetic::Operand;
 namespace clocked {
 
 struct Type {
-	enum TypeName : int {
+	enum TypeName : size_t {
 		BITS = 0,
-		FIXED = 1
+		FIXED = 1,
 	};
 
-	Type(TypeName type=TypeName::FIXED, int width=1, int shift=0);
+	Type(TypeName type=TypeName::FIXED, size_t width=1, int shift=0);
 	~Type();
 
 	TypeName type;
-	int width;
+	size_t width;
 	int shift;
 
 	auto operator<=>(const Type &t) const = default;
@@ -107,7 +107,7 @@ struct Module {
 	string netAt(int uid) const;
 	int netCount() const;
 
-	int pushNet(string name, Type type=Type(Type::TypeName::BITS, 1), Net::Purpose purpose=Net::Purpose::WIRE);
+	size_t pushNet(string name, Type type=Type(Type::TypeName::BITS, 1), Net::Purpose purpose=Net::Purpose::WIRE);
 };
 
 }
