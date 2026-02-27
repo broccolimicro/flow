@@ -1,6 +1,8 @@
 *.o
 *.a
 *.so
+*.dot
+*.v
 build
 test
 coverage*
