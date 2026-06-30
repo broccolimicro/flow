@@ -63,33 +63,36 @@ struct Channel {
 	Operand getData();
 };
 
-struct Assign {
-	Assign();
-	Assign(int net, Expression expr, bool blocking=false);
-	~Assign();
+struct Statement {
+	// Assignment
+	Statement();
+	Statement(int net, Expression expr, bool blocking=false);
+
+	// If/Else
+	Statement(bool elif, vector<Statement> stmts=vector<Statement>(), Expression expr=Expression::boolOf(true));
+	~Statement();
+
+	enum StatementType {
+		ASSIGN = 0,
+		IF = 1,
+		ELIF = 2,
+	};
+
+	StatementType type;
 
 	int net;
-	Expression expr;
 	bool blocking;
+	
+	Expression expr;
+	vector<Statement> sub;
 };
 
-struct Rule {
-	Rule(vector<Assign> assign=vector<Assign>(), Expression guard=Operand(true));
-	~Rule();
-
-	Expression guard;
-	vector<Assign> assign;
-	bool isChained = false; // True for chained else-if sequences & false for parallel ifs
-};
-
-struct Block {
-	Block(Expression clk=Operand(true), vector<Rule> rules=vector<Rule>());
-	~Block();
+struct Trigger {
+	Trigger(Expression clk=Operand(true), vector<Statement> stmts=vector<Statement>());
+	~Trigger();
 
 	Expression clk;
-	vector<Assign> reset;
-	vector<Rule> rules;
-	vector<Rule> _else;  //TODO: support proper nesting, even if trailing branch is sufficient for our templates
+	vector<Statement> stmts;
 };
 
 struct Module {
@@ -99,8 +102,8 @@ struct Module {
 	int reset;
 	int clk;
 
-	vector<Assign> assign;
-	vector<Block> blocks;
+	vector<Statement> stmts;
+	vector<Trigger> triggers;
 
 	int netIndex(string) const;
 	int netIndex(string, bool define=false);

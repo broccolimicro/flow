@@ -190,11 +190,9 @@ Expression synthesizeExpressionProbes(const Expression &e, const Mapping<size_t>
 }
 
 
-void synthesizeChannel(clocked::Module &mod, const Net &net) {
+void synthesizeChannel(clocked::Module &mod, const Net &net, clocked::Statement &resetBlock, clocked::Statement &lastBlock) {
 	static const clocked::Type wire(clocked::Type::TypeName::BITS, 1);
 	clocked::Channel channel;
-	clocked::Block &always = mod.blocks.back();
-
 	if (net.purpose == flow::Net::Purpose::IN) {
 		channel.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::Purpose::IN);
 		channel.ready = mod.pushNet(net.name+"_ready", wire, clocked::Net::Purpose::OUT);
@@ -204,29 +202,29 @@ void synthesizeChannel(clocked::Module &mod, const Net &net) {
 		size_t valid_wire = mod.pushNet(net.name+"_valid", wire, clocked::Net::Purpose::OUT);
 		size_t valid_reg = mod.pushNet(net.name+"_valid_reg", clocked::Type(clocked::Type::TypeName::FIXED, 1), clocked::Net::Purpose::REG);
 		channel.valid = valid_reg;
-		mod.assign.push_back(clocked::Assign(valid_wire, Expression::varOf(valid_reg), true));
-		always.reset.push_back(clocked::Assign(channel.valid, Expression::intOf(0)));
+		mod.stmts.push_back(clocked::Statement(valid_wire, Expression::varOf(valid_reg), true));
+		resetBlock.sub.push_back(clocked::Statement(channel.valid, Expression::intOf(0)));
 
 		channel.ready = mod.pushNet(net.name+"_ready", wire, clocked::Net::Purpose::IN);
-		clocked::Rule reset_valid_reg({
-				clocked::Assign(channel.valid, Expression::intOf(0)),
+		clocked::Statement reset_valid_reg(false, {
+				clocked::Statement(channel.valid, Expression::intOf(0)),
 		}, Expression::varOf(channel.ready));
-		always._else.push_back(reset_valid_reg);
+		lastBlock.sub.push_back(reset_valid_reg);
 
 		size_t data = mod.pushNet(net.name+"_data", synthesizeChannelType(net.type), clocked::Net::Purpose::OUT);
 		channel.data = mod.pushNet(net.name+"_state", synthesizeChannelType(net.type), clocked::Net::Purpose::REG);
-		mod.assign.push_back(clocked::Assign(data, Expression::varOf(channel.data), true));
-		always.reset.push_back(clocked::Assign(channel.data, Expression::intOf(0)));
+		mod.stmts.push_back(clocked::Statement(data, Expression::varOf(channel.data), true));
+		resetBlock.sub.push_back(clocked::Statement(channel.data, Expression::intOf(0)));
 
 		size_t enable = mod.pushNet(net.name+"_enable", wire, clocked::Net::Purpose::WIRE);
-		mod.assign.push_back(clocked::Assign(enable, arithmetic::ident(
+		mod.stmts.push_back(clocked::Statement(enable, arithmetic::ident(
 						!Expression::varOf(channel.valid) || Expression::varOf(channel.ready)), true));
 
 	} else if (net.purpose == flow::Net::Purpose::REG) {
 		channel.valid = -1;  //mod.pushNet(net.name+"_valid", wire, clocked::Net::Purpose::WIRE);
 		channel.ready = -1;  //TODO: these could be wires for debug or mere modelling in cocotb harness
 		channel.data = mod.pushNet(net.name+"_data", synthesizeChannelType(net.type), clocked::Net::Purpose::REG);
-		always.reset.push_back(clocked::Assign(channel.data, Expression::intOf(0)));
+		resetBlock.sub.push_back(clocked::Statement(channel.data, Expression::intOf(0)));
 
 	//TODO: migrate out of synthesizeChannel(), into synthesizeModuleFromFunc(), if/when COND's are no longer detected in netlist?
 	} else if (net.purpose == flow::Net::Purpose::COND) {
@@ -235,7 +233,6 @@ void synthesizeChannel(clocked::Module &mod, const Net &net) {
 	}
 	mod.chans.push_back(channel);
 }
-
 
 set<size_t> getNetsInExpression(const Expression &e) {
 	set<size_t> nets;
@@ -247,7 +244,6 @@ set<size_t> getNetsInExpression(const Expression &e) {
 	return nets;
 }
 
-
 clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 	clocked::Module mod;
 	mod.name = func.name;
@@ -255,9 +251,9 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 	mod.clk = mod.pushNet("clk", clocked::Type(clocked::Type::TypeName::BITS, 1), clocked::Net::Purpose::IN);
 	mod.reset = mod.pushNet("reset", clocked::Type(clocked::Type::TypeName::BITS, 1), clocked::Net::Purpose::IN);
 
-	clocked::Block setupBlock(Expression::varOf(mod.clk));
-	mod.blocks.push_back(setupBlock);
-	clocked::Block &always = mod.blocks.back();
+	clocked::Trigger always(Expression::varOf(mod.clk));
+	always.stmts.push_back(clocked::Statement(false, {}, Expression::varOf(mod.reset)));
+	clocked::Statement lastBlock(true, {}, Operand(true));
 
 	// Map flow nets to valid-ready channels
 	Mapping<size_t> funcNetToChannelData(-1, true);
@@ -266,7 +262,7 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 	//TODO: set<size_t> internalRegisters; ???
 
 	for (size_t netIdx = 0; netIdx < func.nets.size(); netIdx++) {
-		synthesizeChannel(mod, func.nets[netIdx]);
+		synthesizeChannel(mod, func.nets[netIdx], always.stmts[0], lastBlock);
 
 		// Map flow::Func nets to clocked::Channel nets
 		funcNetToChannelData.set(netIdx, mod.chans[netIdx].data);
@@ -279,12 +275,12 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 	size_t branch_id_reg = mod.pushNet("branch_id",
 		clocked::Type(clocked::Type::TypeName::FIXED, branch_id_width),
 		clocked::Net::Purpose::REG);
-	always.reset.push_back(clocked::Assign(branch_id_reg, Expression::intOf(0)));
+	always.stmts[0].sub.push_back(clocked::Statement(branch_id_reg, Expression::intOf(0)));
 
 	size_t branch_id = 0;
 	for (auto condIt = func.conds.begin(); condIt != func.conds.end(); ++condIt) {
-		clocked::Rule branch_rule;
-		branch_rule.assign.push_back(clocked::Assign(branch_id_reg, Expression::intOf(branch_id)));
+		vector<clocked::Statement> branch_rule;
+		branch_rule.push_back(clocked::Statement(branch_id_reg, Expression::intOf(branch_id)));
 
 		Expression predicate = condIt->valid;
 		predicate.minimize();
@@ -327,7 +323,7 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 			// Assign to internal-memory registers
 			size_t mod_data_net = funcNetToChannelData.map(condRegIt->first);
 			internalRegAssignment.applyVars(funcNetToChannelData); 
-			branch_rule.assign.push_back(clocked::Assign(mod_data_net, internalRegAssignment));
+			branch_rule.push_back(clocked::Statement(mod_data_net, internalRegAssignment));
 		}
 
 		for (auto condOutputIt = condIt->outs.begin(); condOutputIt != condIt->outs.end(); condOutputIt++) {
@@ -345,12 +341,12 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 
 			// Assign to outputs
 			request.applyVars(funcNetToChannelData);
-			branch_rule.assign.push_back(clocked::Assign(mod_data_net, request));
+			branch_rule.push_back(clocked::Statement(mod_data_net, request));
 
 			// only when all output channels are ready to be written to
 			size_t mod_valid_net = funcNetToChannelValid.map(condOutputIt->first);
 			if (mod_valid_net != funcNetToChannelValid.undef) {  // flow::Net::Purpose::REG don't have valid/ready signals over channel
-				branch_rule.assign.push_back(clocked::Assign(mod_valid_net, Expression::intOf(1)));
+				branch_rule.push_back(clocked::Statement(mod_valid_net, Expression::intOf(1)));
 
 				size_t mod_ready_net = funcNetToChannelReady.map(condOutputIt->first);
 				if (mod_ready_net != funcNetToChannelReady.undef) {  // flow::Net::Purpose::REG don't have valid/ready signals over channel
@@ -372,15 +368,15 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 		//TODO: prune this default value until a smarter minimize() handles this (see Expression tests)
 		if (branch_ready.size() > 1) { cout << " _<^>_<^>_<^>_<^>_<^>_<^> TODO: " << branch_ready.to_string(true) << endl; } //branch_ready.eraseExpr(0); }
 
-		branch_rule.guard = arithmetic::ident(predicate) && branch_ready;
-		branch_rule.guard.minimize();
-		always.rules.push_back(branch_rule);
+		Expression guard = arithmetic::ident(predicate) && branch_ready;
+		guard.minimize();
+		always.stmts.push_back(clocked::Statement(true, branch_rule, guard));
 
 		// Ensure only this branch executes until transaction is complete
 		Expression branch_selector = arithmetic::ident(Expression::varOf(branch_id_reg) == Expression::intOf(branch_id));
 		branch_ready = branch_selector && branch_ready;
 		branch_ready.minimize();
-		mod.assign.push_back(clocked::Assign(mod.chans[condIt->uid].ready, branch_ready, true));
+		mod.stmts.push_back(clocked::Statement(mod.chans[condIt->uid].ready, branch_ready, true));
 
 		branch_id++;
 	}
@@ -394,7 +390,7 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 			Expression chan_ready = Expression::boolOf(false);
 			for (auto condIt = func.conds.begin(); condIt != func.conds.end(); condIt++) {
 				for (auto condInputIt = condIt->ins.begin(); condInputIt != condIt->ins.end(); condInputIt++) {
-					if (*condInputIt == netIdx) {
+					if (*condInputIt == (int)netIdx) {
 						//size_t mod_valid_net = funcNetToChannelValid.map(condIt->uid);
 						//chan_nvalid = chan_nvalid && ~Expression::varOf(mod.chans[condIt->uid].valid);
 						size_t mod_ready_net = funcNetToChannelReady.map(condIt->uid);
@@ -405,9 +401,13 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 
 			Expression chan_ready_out = chan_ready; //chan_nvalid || chan_ready;
 			chan_ready_out.minimize();
-			mod.assign.push_back(clocked::Assign(mod.chans[netIdx].ready, chan_ready_out, true));
+			mod.stmts.push_back(clocked::Statement(mod.chans[netIdx].ready, chan_ready_out, true));
 		}
 	}
+
+	always.stmts.push_back(lastBlock);
+
+	mod.triggers.push_back(always);
 
 	return mod;
 }

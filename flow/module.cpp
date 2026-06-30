@@ -57,34 +57,34 @@ Operand Channel::getData() {
 	return Operand::varOf(data);
 }
 
-Assign::Assign() {
+Statement::Statement() {
 	net = -1;
 	blocking = true;
+	type = ASSIGN;
 }
 
-Assign::Assign(int net, Expression expr, bool blocking) {
+Statement::Statement(int net, Expression expr, bool blocking) {
+	this->type = ASSIGN;
 	this->net = net;
 	this->expr = expr;
 	this->blocking = blocking;
 }
 
-Assign::~Assign() {
+Statement::Statement(bool elif, vector<Statement> stmts, Expression expr) {
+	this->type = elif ? ELIF : IF;
+	this->expr = expr;
+	this->sub = stmts;
 }
 
-Rule::Rule(vector<Assign> assign, Expression guard) {
-	this->guard = guard;
-	this->assign = assign;
+Statement::~Statement() {
 }
 
-Rule::~Rule() {
-}
-
-Block::Block(Expression clk, vector<Rule> rules) {
+Trigger::Trigger(Expression clk, vector<Statement> stmts) {
 	this->clk = clk;
-	this->rules = rules;
+	this->stmts = stmts;
 }
 
-Block::~Block() {
+Trigger::~Trigger() {
 }
 
 int Module::netIndex(string name) const {
