@@ -87,6 +87,25 @@ Trigger::Trigger(Expression clk, vector<Statement> stmts) {
 Trigger::~Trigger() {
 }
 
+Instance::Instance() {
+}
+
+Instance::Instance(string type, vector<Expression> ports) {
+	this->type = type;
+	this->ports = ports;
+}
+
+Instance::~Instance() {
+}
+
+Module::Module() {
+	reset = -1;
+	clk = -1;
+}
+
+Module::~Module() {
+}
+
 int Module::netIndex(string name) const {
 	for (size_t i = 0; i < (size_t)nets.size(); i++) {
 		if (nets[i].name == name) {

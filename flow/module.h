@@ -19,12 +19,12 @@ struct Type {
 		FIXED = 1,
 	};
 
-	Type(TypeName type=TypeName::FIXED, size_t width=1, int shift=0);
-	~Type();
-
 	TypeName type;
 	size_t width;
 	int shift;
+
+	Type(TypeName type=TypeName::FIXED, size_t width=1, int shift=0);
+	~Type();
 
 	auto operator<=>(const Type &t) const = default;
 	friend std::ostream& operator<<(std::ostream& os, const Type& t);
@@ -38,25 +38,25 @@ struct Net {
 		REG = 3,
 	};
 
-	Net();
-	Net(string name, Type type=Type(Type::TypeName::BITS, 1), Purpose purpose=Purpose::WIRE);
-	~Net();
-
 	string name;
 	Type type;
 	Purpose purpose;
+
+	Net();
+	Net(string name, Type type=Type(Type::TypeName::BITS, 1), Purpose purpose=Purpose::WIRE);
+	~Net();
 
 	auto operator<=>(const Net &n) const = default;
 	friend std::ostream& operator<<(std::ostream& os, const Net& n);
 };
 
 struct Channel {
-	Channel();
-	~Channel();
-
 	int valid;
 	int ready;
 	int data;
+
+	Channel();
+	~Channel();
 
 	Operand getValid();
 	Operand getReady();
@@ -64,14 +64,6 @@ struct Channel {
 };
 
 struct Statement {
-	// Assignment
-	Statement();
-	Statement(int net, Expression expr, bool blocking=false);
-
-	// If/Else
-	Statement(bool elif, vector<Statement> stmts=vector<Statement>(), Expression expr=Expression::boolOf(true));
-	~Statement();
-
 	enum StatementType {
 		ASSIGN = 0,
 		IF = 1,
@@ -85,18 +77,40 @@ struct Statement {
 	
 	Expression expr;
 	vector<Statement> sub;
+
+	// Assignment
+	Statement();
+	Statement(int net, Expression expr, bool blocking=false);
+
+	// If/Else
+	Statement(bool elif, vector<Statement> stmts=vector<Statement>(), Expression expr=Expression::boolOf(true));
+	~Statement();
 };
 
 struct Trigger {
-	Trigger(Expression clk=Operand(true), vector<Statement> stmts=vector<Statement>());
-	~Trigger();
-
 	Expression clk;
 	vector<Statement> stmts;
+
+	Trigger(Expression clk=Operand(true), vector<Statement> stmts=vector<Statement>());
+	~Trigger();
+};
+
+struct Instance {
+	string type;
+	string name;
+	vector<Expression> ports;
+
+	string comment;
+
+	Instance();
+	Instance(string type, vector<Expression> ports=vector<Expression>());
+	~Instance();
 };
 
 struct Module {
 	string name;
+	string comment;
+
 	vector<Net> nets;
 	vector<Channel> chans;
 	int reset;
@@ -104,6 +118,10 @@ struct Module {
 
 	vector<Statement> stmts;
 	vector<Trigger> triggers;
+	vector<Instance> inst;
+
+	Module();
+	~Module();
 
 	int netIndex(string) const;
 	int netIndex(string, bool define=false);
