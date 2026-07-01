@@ -405,7 +405,9 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 		}
 	}
 
-	always.stmts.push_back(lastBlock);
+	if (not lastBlock.sub.empty()) {
+		always.stmts.push_back(lastBlock);
+	}
 
 	mod.triggers.push_back(always);
 
