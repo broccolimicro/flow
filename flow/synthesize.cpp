@@ -6,7 +6,6 @@
 #include <arithmetic/algorithm.h>
 #include <common/mapping.h>
 #include <common/math.h>
-#include <interpret_arithmetic/export_verilog.h>
 
 #include "synthesize.h"
 

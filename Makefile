@@ -1,5 +1,5 @@
 NAME          = flow
-DEPEND        = interpret_arithmetic arithmetic parse_verilog parse_expression parse_ucs parse common
+DEPEND        = arithmetic common
 TEST_DEPEND   = interpret_flow interpret_arithmetic arithmetic parse_dot parse_expression parse_ucs parse_verilog parse common
 
 COVERAGE ?= 0

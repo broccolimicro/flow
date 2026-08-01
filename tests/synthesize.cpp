@@ -51,7 +51,7 @@ parse_verilog::module_def synthesizeVerilogFromFunc(const Func &func) {
 
 	// Test synthesis
 	clocked::Module mod = synthesizeModuleFromFunc(func);
-	parse_verilog::module_def mod_v = export_module(mod);
+	parse_verilog::module_def mod_v = parse_verilog::export_module(mod);
 	string verilog = mod_v.to_string();
 	cout << verilog << endl;
 
@@ -336,7 +336,7 @@ TEST(ModuleSynthesis, SerialAdder) {
 }
 
 auto get_channel_probe = [](arithmetic::Operand &operand) {
-	vector<arithmetic::Operand> probe_args = { arithmetic::Operand::stringOf("probe"), operand };
+	vector<arithmetic::Operand> probe_args = { arithmetic::Operand::termOf("probe"), operand };
 	return Expression(arithmetic::Operation::CALL, probe_args);
 };
 
