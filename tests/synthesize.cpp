@@ -336,7 +336,7 @@ TEST(ModuleSynthesis, SerialAdder) {
 }
 
 auto get_channel_probe = [](arithmetic::Operand &operand) {
-	vector<arithmetic::Operand> probe_args = { arithmetic::Operand::termOf("probe"), operand };
+	vector<arithmetic::Operand> probe_args = { arithmetic::Operand::labelOf("probe"), operand };
 	return Expression(arithmetic::Operation::CALL, probe_args);
 };
 
