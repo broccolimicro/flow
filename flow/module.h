@@ -51,9 +51,18 @@ struct Net {
 };
 
 struct Channel {
+	enum Purpose {
+		IN = 0,
+		OUT = 1,
+		REG = 2,
+		COND = 3,
+	};
+
 	int valid;
 	int ready;
 	int data;
+
+	Purpose purpose;
 
 	Channel();
 	~Channel();
@@ -122,6 +131,9 @@ struct Module {
 
 	Module();
 	~Module();
+
+	Operand getClk();
+	Operand getReset();
 
 	int netIndex(string) const;
 	int netIndex(string, bool define=false);

@@ -106,6 +106,14 @@ Module::Module() {
 Module::~Module() {
 }
 
+Operand Module::getClk() {
+	return arithmetic::Operand::varOf(clk);
+}
+
+Operand Module::getReset() {
+	return arithmetic::Operand::varOf(reset);
+}
+
 int Module::netIndex(string name) const {
 	for (size_t i = 0; i < (size_t)nets.size(); i++) {
 		if (nets[i].name == name) {
