@@ -273,81 +273,65 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 		funcNetToChannelReady.set(netIdx, mod.chans[netIdx].ready);
 	}
 
-	size_t branch_id = 0;
-	for (auto condIt = func.conds.begin(); condIt != func.conds.end(); ++condIt) {
-		vector<clocked::Statement> branch_rule;
-
-		Expression branch_valid = condIt->valid;
-		branch_valid.applyVars(funcNetToChannelData);
-		//branch_valid = synthesizeExpressionProbes(branch_valid, funcNetToChannelValid, funcNetToChannelData);
-
-		//TODO: arithmetic::ident() instead?? only true by empty default?
-		Expression branch_ready = Expression::boolOf(true);
+	for (const auto &cond : func.conds) {
+		clocked::Statement branch(true);
 
 		set<size_t> branchOperands;
-
 		// only when [input?] channels referenced in guard predicate are valid
-		for (size_t net : getNetsInExpression(branch_valid)) {
-			//size_t func_net = funcNetToChannelData.unmap(net);  //decode mapping applied beforehand
-			size_t mod_valid_net = funcNetToChannelValid.map(net);
-			branchOperands.insert(mod_valid_net);
-			if (debug) { cout << "==(var in branch_valid expr)> " << mod_valid_net << endl; }
+		for (size_t net : getNetsInExpression(cond.valid)) {
+			branchOperands.insert(funcNetToChannelValid.map(net));
 		}
 
 		// only when all input channels, who need acknowledgement, are valid
-		for (auto condInputIt = condIt->ins.begin(); condInputIt != condIt->ins.end(); condInputIt++) {
-			size_t mod_valid_net = funcNetToChannelValid.map(*condInputIt);
-			branchOperands.insert(mod_valid_net); //TODO: must ack's be valid?
-			if (debug) { cout << "==(var to ack)> " << mod_valid_net << endl; }
+		for (int input : cond.ins) {
+			branchOperands.insert(funcNetToChannelValid.map(input));
 		}
 
-		for (auto condRegIt = condIt->regs.begin(); condRegIt != condIt->regs.end(); condRegIt++) {
-			Expression internalRegAssignment(condRegIt->second);
+		for (const auto &reg : cond.regs) {
+			Expression internalRegAssignment(reg.second);
 			internalRegAssignment.minimize();
 
 			// only when [input?] channels referenced in internal-memory assignments are valid
 			for (size_t net : getNetsInExpression(internalRegAssignment)) {
-				size_t mod_valid_net = funcNetToChannelValid.map(net);
-				branchOperands.insert(mod_valid_net);
-				if (debug) { cout << "==(var in mem expr)> " << mod_valid_net << endl; }
+				branchOperands.insert(funcNetToChannelValid.map(net));
 			}
 
 			// Assign to internal-memory registers
-			size_t mod_data_net = funcNetToChannelData.map(condRegIt->first);
+			size_t mod_data_net = funcNetToChannelData.map(reg.first);
 			internalRegAssignment.applyVars(funcNetToChannelData); 
-			branch_rule.push_back(clocked::Statement(mod_data_net, internalRegAssignment));
+			branch.sub.push_back(clocked::Statement(mod_data_net, internalRegAssignment));
 		}
 
-		for (auto condOutputIt = condIt->outs.begin(); condOutputIt != condIt->outs.end(); condOutputIt++) {
+		for (const auto &output : cond.outs) {
 			//only when [input?] channels referenced in requests to be sent are valid
-			for (size_t net : getNetsInExpression(condOutputIt->second)) {
-				size_t mod_valid_net = funcNetToChannelValid.map(net);
-				branchOperands.insert(mod_valid_net);
-				if (debug) { cout << "==(var in req expr)> " << mod_valid_net << endl; }
+			for (size_t net : getNetsInExpression(output.second)) {
+				branchOperands.insert(funcNetToChannelValid.map(net));
 			}
 
 			// Assign to outputs
-			size_t mod_data_net = funcNetToChannelData.map(condOutputIt->first);
-			Expression request = condOutputIt->second;
+			size_t mod_data_net = funcNetToChannelData.map(output.first);
+			Expression request = output.second;
 			request.applyVars(funcNetToChannelData);
 			request.minimize();
-			branch_rule.push_back(clocked::Statement(mod_data_net, request));
+			branch.sub.push_back(clocked::Statement(mod_data_net, request));
 
 			// only when all output channels are ready to be written to
-			size_t mod_valid_net = funcNetToChannelValid.map(condOutputIt->first);
+			size_t mod_valid_net = funcNetToChannelValid.map(output.first);
 			if (mod_valid_net != funcNetToChannelValid.undef) {  // flow::Net::REG don't have valid/ready signals over channel
-				branch_rule.push_back(clocked::Statement(mod_valid_net, Expression::intOf(1)));
+				branch.sub.push_back(clocked::Statement(mod_valid_net, Expression::intOf(1)));
 
-				size_t mod_ready_net = funcNetToChannelReady.map(condOutputIt->first);
-				if (mod_ready_net != funcNetToChannelReady.undef) {  // flow::Net::REG don't have valid/ready signals over channel
-					branch_ready = branch_ready
+				size_t mod_ready_net = funcNetToChannelReady.map(output.first);
+				if (mod_ready_net != funcNetToChannelReady.undef) {  // flow::Net::REG don't have valid/ready signals ovver channel
+					branch.expr = branch.expr
 						&& (!Expression::varOf(mod_valid_net) || Expression::varOf(mod_ready_net));
 				}
 			}
 			// ...either they're open (!valid) or _will be_ open next cycle (ready)
 		}
 
-		//branch_ready.minimize();
+		Expression branch_valid = cond.valid;
+		branch_valid.applyVars(funcNetToChannelData);
+		//branch_valid = synthesizeExpressionProbes(branch_valid, funcNetToChannelValid, funcNetToChannelData);
 		for (size_t mod_valid_net : branchOperands) {
 			if (mod_valid_net != funcNetToChannelValid.undef) {  // flow::Net::REG don't have valid/ready signals over channel
 				branch_valid = branch_valid && Expression::varOf(mod_valid_net);
@@ -355,15 +339,13 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 		}
 		branch_valid.minimize();
 
-		branch_ready = arithmetic::Expression::varOf(mod.chans[condIt->uid].valid) && branch_ready;
-		branch_ready.minimize();
-		always.stmts.push_back(clocked::Statement(true, branch_rule, branch_ready));
+		branch.expr = mod.chans[cond.uid].getValid() && branch.expr;
+		branch.expr.minimize();
+		always.stmts.push_back(branch);
 
 		// Ensure only this branch executes until transaction is complete
-		mod.stmts.push_back(clocked::Statement(mod.chans[condIt->uid].valid, branch_valid, true));
-		mod.stmts.push_back(clocked::Statement(mod.chans[condIt->uid].ready, branch_ready, true));
-
-		branch_id++;
+		mod.stmts.push_back(clocked::Statement(mod.chans[cond.uid].valid, branch_valid, true));
+		mod.stmts.push_back(clocked::Statement(mod.chans[cond.uid].ready, branch.expr, true));
 	}
 
 	// Return ready signals for each channel
