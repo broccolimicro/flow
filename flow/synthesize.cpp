@@ -302,11 +302,17 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 			branch.sub.push_back(clocked::Statement(mod_data_net, internalRegAssignment));
 		}
 
+		vector<int> branchOuts;
 		for (const auto &output : cond.outs) {
 			//only when [input?] channels referenced in requests to be sent are valid
 			for (size_t net : getNetsInExpression(output.second)) {
 				branchOperands.insert(funcNetToChannelValid.map(net));
 			}
+
+			// TODO(edward.bingham) This assumes that there is a one to one mapping
+			// between channels in the clocked module channels and the flow func
+			// nets.
+			branchOuts.push_back(output.first);
 
 			// Assign to outputs
 			size_t mod_data_net = funcNetToChannelData.map(output.first);
@@ -327,6 +333,13 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 				}
 			}
 			// ...either they're open (!valid) or _will be_ open next cycle (ready)
+		}
+
+		for (int chanIdx = 0; chanIdx < (int)mod.chans.size(); chanIdx++) {
+			if (mod.chans[chanIdx].purpose == clocked::Channel::OUT
+				and find(branchOuts.begin(), branchOuts.end(), chanIdx) == branchOuts.end()) {
+				resetValidReg(branch, mod.chans[chanIdx]);
+			}
 		}
 
 		Expression branch_valid = cond.valid;
