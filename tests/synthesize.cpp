@@ -7,10 +7,10 @@
 #include <common/mapping.h>
 #include <common/mock_netlist.h>
 #include <flow/func.h>
-#include <flow/module.h>
+#include <verilog/module.h>
 #include <flow/synthesize.h>
 #include <interpret_flow/export_dot.h>
-#include <interpret_flow/export_verilog.h>
+#include <interpret_verilog/export_verilog.h>
 
 #define EXPECT_SUBSTRING(source, substring) \
     EXPECT_NE((source).find(substring), std::string::npos) \

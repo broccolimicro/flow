@@ -1,7 +1,7 @@
 #pragma once
 
 #include "func.h"
-#include "module.h"
+#include <verilog/module.h>
 
 namespace flow {
 

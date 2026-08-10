@@ -1,3 +1,5 @@
+#include "synthesize.h"
+
 #include <algorithm>
 #include <functional>
 #include <iterator>
@@ -6,8 +8,6 @@
 #include <arithmetic/algorithm.h>
 #include <common/mapping.h>
 #include <common/math.h>
-
-#include "synthesize.h"
 
 using arithmetic::Expression;
 using arithmetic::Operation;
