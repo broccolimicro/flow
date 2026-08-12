@@ -188,15 +188,15 @@ void Condition::ack(Operand in) {
 	if (not in.isVar()) {
 		return;
 	}
-	ins.push_back(in.index);
+	auto pos = std::lower_bound(ins.begin(), ins.end(), in.index);
+	if (pos == ins.end() or *pos != (int)in.index) {
+		ins.insert(pos, in.index);
+	}
 }
 
 void Condition::ack(vector<Operand> in) {
-	for (auto i = in.begin(); i != in.end(); i++) {
-		if (not i->isVar()) {
-			continue;
-		}
-		ins.push_back(i->index);
+	for (auto op : in) {
+		ack(op);
 	}
 }
 
