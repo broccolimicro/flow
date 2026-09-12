@@ -261,7 +261,6 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 	// Map flow nets to valid-ready channels
 	Mapping<size_t> funcNetToChannelData(-1, true);
 	Mapping<size_t> funcNetToChannelValid(-1, true);
-	Mapping<size_t> funcNetToChannelReady(-1, true);
 	//TODO: set<size_t> internalRegisters; ???
 
 	for (size_t netIdx = 0; netIdx < func.nets.size(); netIdx++) {
@@ -270,7 +269,6 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 		// Map flow::Func nets to clocked::Channel nets
 		funcNetToChannelData.set(netIdx, mod.chans[netIdx].data);
 		funcNetToChannelValid.set(netIdx, mod.chans[netIdx].valid);
-		funcNetToChannelReady.set(netIdx, mod.chans[netIdx].ready);
 	}
 
 	for (const auto &cond : func.conds) {
@@ -322,14 +320,15 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 			branch.sub.push_back(clocked::Statement(mod_data_net, request));
 
 			// only when all output channels are ready to be written to
-			size_t mod_valid_net = funcNetToChannelValid.map(output.first);
-			if (mod_valid_net != funcNetToChannelValid.undef) {  // flow::Net::REG don't have valid/ready signals over channel
-				branch.sub.push_back(clocked::Statement(mod_valid_net, Expression::intOf(1)));
+			// flow::Net::REG don't have valid/ready signals over channel
+			if (mod.chans[output.first].hasValid()) {
+				branch.sub.push_back(clocked::Statement(
+					mod.chans[output.first].valid, Expression::intOf(1)));
 
-				size_t mod_ready_net = funcNetToChannelReady.map(output.first);
-				if (mod_ready_net != funcNetToChannelReady.undef) {  // flow::Net::REG don't have valid/ready signals ovver channel
+				// flow::Net::REG don't have valid/ready signals ovver channel
+				if (mod.chans[output.first].hasReady()) {
 					branch.expr = branch.expr
-						&& (!Expression::varOf(mod_valid_net) || Expression::varOf(mod_ready_net));
+						&& (!mod.chans[output.first].getValid() || mod.chans[output.first].getReady());
 				}
 			}
 			// ...either they're open (!valid) or _will be_ open next cycle (ready)
@@ -368,8 +367,7 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 			for (const auto &cond : func.conds) {
 				for (int input : cond.ins) {
 					if (input == (int)netIdx) {
-						size_t mod_ready_net = funcNetToChannelReady.map(cond.uid);
-						chan_ready = chan_ready || Expression::varOf(mod_ready_net);
+						chan_ready = chan_ready || mod.chans[cond.uid].getReady();
 					}
 				}
 			}
