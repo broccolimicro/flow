@@ -26,168 +26,6 @@ clocked::Type synthesizeChannelType(const Type &type) {
 	return result;
 }
 
-
-//TODO: push helpers to arithmetic
-bool isProbeCall(const Operation &o) {
-	return (o.func == Operation::OpType::CALL)
-		&& (!o.operands.empty())
-		&& (o.operands[0].cnst.sval == "probe");
-}
-
-bool isBooleanOperation(const Operation &operation) {
-	switch (operation.func) {
-		case Operation::OpType::BOOLEAN_AND:
-		case Operation::OpType::BOOLEAN_OR:
-		case Operation::OpType::BOOLEAN_XOR:
-		case Operation::OpType::BOOLEAN_NOT:
-		// Operators below don't _require_ boolean operands
-		//case Operation::OpType::EQUAL:
-		//case Operation::OpType::NOT_EQUAL:
-		//case Operation::OpType::LESS:
-		//case Operation::OpType::GREATER:
-		//case Operation::OpType::LESS_EQUAL:
-		//case Operation::OpType::GREATER_EQUAL:
-			return true;
-		default:
-			return false;
-	}
-}
-
-
-Expression synthesizeExpressionProbes(const Expression &e, const Mapping<size_t> &ChannelToValid, const Mapping<size_t> &ChannelToData) {
-	//cout << endl << endl << "<<<<<<<<<<<>>>>>>>>>>>" << endl;
-	Expression result(e);
-
-	//TODO: verify that we're only substituting channel references, not local vars (if mistakenly probed)
-	//std::set<size_t> non_channel_vars;
-	//std::set_difference(
-	//		ChannelToData.begin(), ChannelToData.end(),
-	//		ChannelToValid.begin(), ChannelToValid.end(),
-	//		std::inserter(non_channel_vars, non_channel_vars.begin())
-	//);
-
-	auto emplaceProbe = [&](size_t parent_expr_operation_idx, size_t channel_idx) {
-		//cout << " ~ ~ emplace: e" << parent_expr_operation_idx << " <- v" << channel_idx << " ~ ~" << endl;
-		Operation substitution(Operation::OpType::IDENTITY, {Operand::varOf(channel_idx)});
-		substitution.exprIndex = parent_expr_operation_idx;
-		result.sub.setExpr(substitution);
-	};
-
-	size_t subexpr_count = e.sub.size();
-	if (subexpr_count == 0) {
-		//cout << ">>>>>>>>>>> early, no probes <<<<<<<<<<<" << endl;
-		return e;
-
-	} else if (subexpr_count == 1) {
-
-		const Operation &operation = *e.getExpr(0);
-		if (!isProbeCall(operation)) { return e; }
-
-		size_t channel_idx = 0;
-		//size_t channel_data = ChannelToData.map(channel_idx);
-		size_t channel_valid = ChannelToValid.map(channel_idx);
-		//cout << "probe channel v" << channel_idx << " [v:" << channel_valid << ",d:" << channel_data << "]" << endl;
-		emplaceProbe(0, channel_valid);
-
-		//cout << ">>>>>>>>>>> early, expr is just 1 probe <<<<<<<<<<<" << endl;
-		result.minimize();
-		return result;
-	}
-
-	//cout << "Post-order DFS:" << endl;
-	vector<Operation> child_probes;
-	for (arithmetic::PostOrderDFSIterator operation_it(e.sub, {e.top}); !operation_it.done(); ++operation_it) {
-		const Operation &operation = *operation_it;
-		//cout << "==> e" << operation.exprIndex;
-
-		// Descend down to all probe() calls
-		if (isProbeCall(operation)) {
-			//cout << endl;
-			child_probes.push_back(operation);
-			continue;
-		}
-
-		// New, lower "or" ceiling?
-		if (operation.func == Operation::OpType::BOOLEAN_OR) {
-			//cout << "!!" << endl;
-			size_t parent_operation_idx = operation.exprIndex;
-			Operation parent_operation = *e.getExpr(parent_operation_idx);
-
-			Operand parent_copy = result.sub.pushExpr(parent_operation);
-			vector<Operand> new_parent_operands = {parent_copy};  //Operand::exprOf(parent_operation_idx);
-
-			// For each channel_data substitution, append an "&& channel_valid" atop this BOOLEAN_OR
-			for (const Operation &probe_operation : child_probes) {
-				size_t child_operation_idx = probe_operation.exprIndex;
-				size_t channel_idx = probe_operation.operands[1].index;
-				size_t channel_data = ChannelToData.map(channel_idx);
-				size_t channel_valid = ChannelToValid.map(channel_idx);
-				//cout << "  \\___> " << child_operation_idx << endl;
-				//cout << "probe channel v" << channel_idx << " [v:" << channel_valid << ",d:" << channel_data << "]" << endl;
-				//cout << "       parent e" << parent_operation_idx << endl;
-
-				emplaceProbe(child_operation_idx, channel_data);
-				new_parent_operands.insert(new_parent_operands.begin(), Operand::varOf(channel_valid));
-			}
-			child_probes.clear();
-
-			Operation parent_expr_only_when_valid(Operation::OpType::BOOLEAN_AND, new_parent_operands);
-			parent_expr_only_when_valid.exprIndex = parent_operation_idx;
-			result.sub.setExpr(parent_expr_only_when_valid);
-			continue;
-		}
-
-		//TODO: when backtracking, pop off ceiling
-		//cout << valid_regions.back() << endl;
-		//cout << endl;
-	}
-
-	//TODO: extract base case para merge two near-identical substitutions 
-	// Synthesize leftover probes not nested within any BOOLEAN_OR
-	if (!child_probes.empty()) {
-		//cout << endl << "...nobody's kids?" << endl;
-		size_t parent_operation_idx = e.top.index;  //TODO: e.sub.getExpr(e.top.index); ??
-		Operation parent_operation = *e.getExpr(parent_operation_idx);
-
-		Operand parent_copy = result.sub.pushExpr(parent_operation);
-		vector<Operand> new_parent_operands = {parent_copy};  //Operand::exprOf(parent_operation_idx);
-
-		// For each channel_data substitution, append an "&& channel_valid" at the top
-		for (const Operation &probe_operation : child_probes) {
-			size_t child_operation_idx = probe_operation.exprIndex;
-			size_t channel_idx = probe_operation.operands[1].index;
-			size_t channel_data = ChannelToData.map(channel_idx);
-			size_t channel_valid = ChannelToValid.map(channel_idx);
-			//cout << "  \\___> " << child_operation_idx << endl;
-			//cout << "probe channel v" << channel_idx << " [v:" << channel_valid << ",d:" << channel_data << "]" << endl;
-			//cout << "       parent e" << parent_operation_idx << endl;
-
-			// Base case: top IS probe() call
-			if (parent_operation_idx == child_operation_idx) {
-				emplaceProbe(child_operation_idx, channel_valid);
-				break;  //TODO: just return immediately?
-			}
-
-			emplaceProbe(child_operation_idx, channel_data);
-			new_parent_operands.insert(new_parent_operands.begin(), Operand::varOf(channel_valid));
-		}
-		child_probes.clear();
-
-		Operation parent_expr_only_when_valid(Operation::OpType::BOOLEAN_AND, new_parent_operands);
-		parent_expr_only_when_valid.exprIndex = parent_operation_idx;
-		result.sub.setExpr(parent_expr_only_when_valid);
-	}
-
-	//cout << endl << "><><<>><><<>><><<>><><" << endl;
-	//cout << "PRE-MINIMIZE:" << endl;
-	//cout << result.to_string();
-	//cout << ">>>>>>>>>>><<<<<<<<<<<" << endl;
-
-	result.minimize();
-	//result.tidy();
-	return result;
-}
-
 void resetValidReg(clocked::Statement &block, const clocked::Channel &chan) {
 	block.sub.push_back(
 		clocked::Statement(false, {
@@ -238,17 +76,155 @@ void synthesizeChannel(clocked::Module &mod, const Net &net, clocked::Statement 
 	mod.chans.push_back(channel);
 }
 
-set<size_t> getNetsInExpression(const Expression &e) {
-	set<size_t> nets;
-	for (const arithmetic::Operand &operand : e.exprIndex()) {
-		if (operand.type == arithmetic::Operand::Type::VAR) {
-			nets.insert(operand.index);
+arithmetic::RuleSet buildRules() {
+	using namespace arithmetic;
+
+	Expression a = Expression::varOf(0);
+	Expression b = Expression::varOf(1);
+	Expression c = Expression::varOf(2);
+	Expression d = Expression::varOf(3);
+	Expression U = Expression::U();
+
+	// All of the simplification rules for Val-Data
+	return RuleSet({
+		memberCall(construct("ValData", {a, b}), "probe", {}) > construct("ValData", {a, b}), 
+		member(construct("ValData", {a, b}), "val") > a,
+		member(construct("ValData", {a, b}), "data") > b,
+		(isValid(construct("ValData", {a, b}))) > a,
+		(~construct("ValData", {a, b})) > (~a),
+		(construct("ValData", {a, b}) & construct("ValData", {c, d})) > (a&c),
+		(construct("ValData", {a, b}) | construct("ValData", {c, d})) > (a|c),
+		(construct("ValData", {a, b}) & c) > (a&c),
+		(construct("ValData", {a, b}) | c) > (a|c),
+		(a & construct("ValData", {c, d})) > (a&c),
+		(a | construct("ValData", {c, d})) > (a|c),
+
+		(isTrue(construct("ValData", {a, b}))) > (a&&b),
+		(!construct("ValData", {a, b})) > construct("ValData", {a, !b}),
+		(construct("ValData", {a, b}) && construct("ValData", {c, d})) > construct("ValData", {a&c, b&&d}),
+		(construct("ValData", {a, b}) || construct("ValData", {c, d})) > construct("ValData", {(a&&b)|(c&&d)|(a&c), (a&&b)||(c&&d)}),
+		(booleanXor(construct("ValData", {a, b}), construct("ValData", {c, d}))) > construct("ValData", {a&c, booleanXor(b, d)}),
+
+		(construct("ValData", {a, b}) + construct("ValData", {c, d})) > construct("ValData", {a&c, b+d}),
+		(construct("ValData", {a, b}) - construct("ValData", {c, d})) > construct("ValData", {a&c, b-d}),
+		(construct("ValData", {a, b}) * construct("ValData", {c, d})) > construct("ValData", {a&c, b*d}),
+		(construct("ValData", {a, b}) / construct("ValData", {c, d})) > construct("ValData", {a&c, b/d}),
+		(construct("ValData", {a, b}) % construct("ValData", {c, d})) > construct("ValData", {a&c, b%d}),
+		
+		(construct("ValData", {a, b}) == construct("ValData", {c, d})) > construct("ValData", {a&c, b==d}),
+		(construct("ValData", {a, b}) != construct("ValData", {c, d})) > construct("ValData", {a&c, b!=d}),
+		(construct("ValData", {a, b}) < construct("ValData", {c, d})) > construct("ValData", {a&c, b<d}),
+		(construct("ValData", {a, b}) > construct("ValData", {c, d})) > construct("ValData", {a&c, b>d}),
+		(construct("ValData", {a, b}) <= construct("ValData", {c, d})) > construct("ValData", {a&c, b<=d}),
+		(construct("ValData", {a, b}) >= construct("ValData", {c, d})) > construct("ValData", {a&c, b>=d}),
+	});
+}
+
+void minimizeTypes(const clocked::Module &mod, arithmetic::OperationSet expr) {
+	using namespace arithmetic;
+
+	for (const auto &idx : expr.exprIndex()) {
+		arithmetic::Operation op = *expr.getExpr(idx.index);
+
+		bool modified = false;
+		if (op.func == arithmetic::Operation::CALL) {
+			if (op.operands.empty()
+				or not op.operands[0].isConst()
+				or op.operands[0].cnst.type != Value::LABEL) {
+				continue;
+			}
+
+			std::string term = op.operands[0].cnst.sval;
+
+			// built-in functions
+			if (term == "rand") {
+				op.operands[0].cnst.sval = "random";
+				modified = true;
+			}
+		} else if (op.func == arithmetic::Operation::VALIDITY) {
+			if (op.operands.empty()) {
+				continue;
+			}
+
+			if (op.operands[0].isVar()) {
+				clocked::Type type = mod.nets[op.operands[0].index].type;
+
+				if (type.type == clocked::Type::BITS and type.width == 1) {
+					op.func = arithmetic::Operation::IDENTITY;
+					modified = true;
+				} else {
+					op.func = arithmetic::Operation::IDENTITY;
+					op.operands.clear();
+					op.operands.push_back(Operand::vdd());
+					modified = true;
+				}
+			}
+		} else if (op.func == arithmetic::Operation::TRUTHINESS) {
+			if (op.operands.empty()) {
+				continue;
+			}
+
+			if (op.operands[0].isVar()) {
+				clocked::Type type = mod.nets[op.operands[0].index].type;
+
+				if ((type.type == clocked::Type::BITS and type.width == 1)
+					or (type.type == clocked::Type::FIXED and type.width == 1)) {
+					op.func = arithmetic::Operation::IDENTITY;
+					modified = true;
+				} else {
+					op.func = arithmetic::Operation::NOT_EQUAL;
+					op.operands.push_back(Operand::intOf(0));
+					modified = true;
+				}
+			}
+		} else if (op.func == arithmetic::Operation::CAST) {
+			if (op.operands.size() < 2u
+				or not op.operands[0].isConst()
+				or op.operands[0].cnst.type != Value::LABEL) {
+				continue;
+			}
+
+			std::string term = op.operands[0].cnst.sval;
+
+			if (op.operands[1].isVar()) {
+				clocked::Type type = mod.nets[op.operands[1].index].type;
+
+				if (term == "wire") {
+					if (type.type == clocked::Type::BITS and type.width == 1) {
+						op.func = arithmetic::Operation::IDENTITY;
+						op.operands.erase(op.operands.begin());
+						modified = true;
+					} else {
+						op.func = arithmetic::Operation::IDENTITY;
+						op.operands.clear();
+						op.operands.push_back(Operand::vdd());
+						modified = true;
+					}
+				} else if (term == "bool") {
+					if ((type.type == clocked::Type::BITS and type.width == 1)
+						or (type.type == clocked::Type::FIXED and type.width == 1)) {
+						op.func = arithmetic::Operation::IDENTITY;
+						op.operands.erase(op.operands.begin());
+						modified = true;
+					} else {
+						op.func = arithmetic::Operation::NOT_EQUAL;
+						op.operands.erase(op.operands.begin());
+						op.operands.push_back(Operand::intOf(0));
+						modified = true;
+					}
+				}
+			}
+		}
+
+		if (modified) {
+			expr.setExpr(op);
 		}
 	}
-	return nets;
 }
 
 clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
+	auto rules = buildRules();
+
 	clocked::Module mod;
 	mod.name = func.name;
 
@@ -258,74 +234,81 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 	clocked::Trigger always(mod.getClk());
 	always.stmts.push_back(clocked::Statement(false, {}, mod.getReset()));
 
-	// Map flow nets to valid-ready channels
-	Mapping<size_t> funcNetToChannelData(-1, true);
-	Mapping<size_t> funcNetToChannelValid(-1, true);
-	//TODO: set<size_t> internalRegisters; ???
-
+	std::vector<size_t> nets;
+	std::vector<Expression> structs;
+	Expression constStruct = arithmetic::construct("ValData", {
+		Expression::vdd(),
+		Expression::U(),
+	});
 	for (size_t netIdx = 0; netIdx < func.nets.size(); netIdx++) {
 		synthesizeChannel(mod, func.nets[netIdx], always.stmts[0]);
 
 		// Map flow::Func nets to clocked::Channel nets
-		funcNetToChannelData.set(netIdx, mod.chans[netIdx].data);
-		funcNetToChannelValid.set(netIdx, mod.chans[netIdx].valid);
+		nets.push_back(netIdx);
+		structs.push_back(
+			arithmetic::construct("ValData", {
+				(mod.chans.back().hasValid() ?
+					Expression::varOf(mod.chans.back().valid) :
+					Expression::vdd()),
+				Expression::varOf(mod.chans.back().data)
+			})
+		);
 	}
 
 	for (const auto &cond : func.conds) {
 		clocked::Statement branch(true);
 
-		set<size_t> branchOperands;
-		// only when [input?] channels referenced in guard predicate are valid
-		for (size_t net : getNetsInExpression(cond.valid)) {
-			branchOperands.insert(funcNetToChannelValid.map(net));
-		}
-
-		// only when all input channels, who need acknowledgement, are valid
-		for (int input : cond.ins) {
-			branchOperands.insert(funcNetToChannelValid.map(input));
-		}
-
 		for (const auto &reg : cond.regs) {
-			Expression internalRegAssignment(reg.second);
-			internalRegAssignment.minimize();
+			Expression regExpr(reg.second);
+			//cout << "reg from: " << regExpr.to_string(true) << endl;
+			regExpr.substituteConst(constStruct);
+			regExpr.substitute(nets, structs);
+			regExpr = member(regExpr, "data");
+			//cout << "reg from: " << regExpr.to_string(true) << endl;
 
-			// only when [input?] channels referenced in internal-memory assignments are valid
-			for (size_t net : getNetsInExpression(internalRegAssignment)) {
-				branchOperands.insert(funcNetToChannelValid.map(net));
-			}
-
-			// Assign to internal-memory registers
-			size_t mod_data_net = funcNetToChannelData.map(reg.first);
-			internalRegAssignment.applyVars(funcNetToChannelData); 
-			branch.sub.push_back(clocked::Statement(mod_data_net, internalRegAssignment));
+			regExpr.minimize(rules);
+			//cout << "reg from: " << regExpr.to_string(true) << endl;
+			regExpr.minimize();
+			minimizeTypes(mod, regExpr);
+			regExpr.minimize();
+			//cout << "reg to: " << regExpr.to_string(true) << endl;
+			// TODO(edward.bingham) unwrap the structure, select the data
+			branch.sub.push_back(
+				clocked::Statement(mod.chans[reg.first].data, regExpr));
 		}
 
 		vector<int> branchOuts;
 		for (const auto &output : cond.outs) {
-			//only when [input?] channels referenced in requests to be sent are valid
-			for (size_t net : getNetsInExpression(output.second)) {
-				branchOperands.insert(funcNetToChannelValid.map(net));
-			}
-
 			// TODO(edward.bingham) This assumes that there is a one to one mapping
 			// between channels in the clocked module channels and the flow func
 			// nets.
 			branchOuts.push_back(output.first);
 
 			// Assign to outputs
-			size_t mod_data_net = funcNetToChannelData.map(output.first);
-			Expression request = output.second;
-			request.applyVars(funcNetToChannelData);
+			Expression request(output.second);
+			//cout << "out from: " << request.to_string(true) << endl;
+			request.substituteConst(constStruct);
+			request.substitute(nets, structs);
+			request = member(request, "data");
+			//cout << "out from: " << request.to_string(true) << endl;
+
+			request.minimize(rules);
+			//cout << "out from: " << request.to_string(true) << endl;
 			request.minimize();
-			branch.sub.push_back(clocked::Statement(mod_data_net, request));
+			minimizeTypes(mod, request);
+			request.minimize();
+			//cout << "out to: " << request.to_string(true) << endl;
+			// TODO(edward.bingham) unwrap the structure, select the data
+			branch.sub.push_back(
+				clocked::Statement(mod.chans[output.first].data, request));
 
 			// only when all output channels are ready to be written to
 			// flow::Net::REG don't have valid/ready signals over channel
 			if (mod.chans[output.first].hasValid()) {
 				branch.sub.push_back(clocked::Statement(
-					mod.chans[output.first].valid, Expression::intOf(1)));
+					mod.chans[output.first].valid, Expression::vdd()));
 
-				// flow::Net::REG don't have valid/ready signals ovver channel
+				// flow::Net::REG don't have valid/ready signals over channel
 				if (mod.chans[output.first].hasReady()) {
 					branch.expr = branch.expr
 						&& (!mod.chans[output.first].getValid() || mod.chans[output.first].getReady());
@@ -341,18 +324,21 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 			}
 		}
 
-		Expression branch_valid = cond.valid;
-		branch_valid.applyVars(funcNetToChannelData);
-		//branch_valid = synthesizeExpressionProbes(branch_valid, funcNetToChannelValid, funcNetToChannelData);
-		for (size_t mod_valid_net : branchOperands) {
-			if (mod_valid_net != funcNetToChannelValid.undef) {  // flow::Net::REG don't have valid/ready signals over channel
-				branch_valid = branch_valid && Expression::varOf(mod_valid_net);
-			}
-		}
+		Expression branch_valid(arithmetic::isTrue(cond.valid));
+		branch_valid.substituteConst(constStruct);
+		branch_valid.substitute(nets, structs);
+
+		branch_valid.minimize(rules);
+		branch_valid.minimize();
+		minimizeTypes(mod, branch_valid);
 		branch_valid.minimize();
 
 		branch.expr = mod.chans[cond.uid].getValid() && branch.expr;
 		branch.expr.minimize();
+		minimizeTypes(mod, branch.expr);
+		branch.expr.minimize();
+
+
 		always.stmts.push_back(branch);
 
 		// Ensure only this branch executes until transaction is complete
@@ -371,6 +357,8 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 					}
 				}
 			}
+			chan_ready.minimize();
+			minimizeTypes(mod, chan_ready);
 			chan_ready.minimize();
 			mod.stmts.push_back(clocked::Statement(mod.chans[netIdx].ready, chan_ready, true));
 		}

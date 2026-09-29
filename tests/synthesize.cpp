@@ -249,8 +249,7 @@ TEST(ModuleSynthesis, SerialAdder) {
 }
 
 auto get_channel_probe = [](arithmetic::Operand &operand) {
-	vector<arithmetic::Operand> probe_args = { arithmetic::Operand::labelOf("probe"), operand };
-	return Expression(arithmetic::Operation::CALL, probe_args);
+	return arithmetic::memberCall(operand, "probe", {});
 };
 
 TEST(ModuleSynthesis, Probes) {
@@ -278,32 +277,32 @@ TEST(ModuleSynthesis, Probes) {
 	Expression expr_s((probe_Ad + probe_Bd + expr_ci) % pow(2, WIDTH));
 	Expression expr_co((probe_Ad + probe_Bd + expr_ci) / pow(2, WIDTH));
 
-	size_t branch0 = func.pushCond(~probe_Ac & ~probe_Bc);
+	size_t branch0 = func.pushCond(!probe_Ac && !probe_Bc);
 	func.conds[branch0].req(Sd, expr_s);
-	func.conds[branch0].req(Sc, Expression::intOf(0));
+	func.conds[branch0].req(Sc, Expression::boolOf(false));
 	func.conds[branch0].mem(ci, expr_co);
 	func.conds[branch0].ack({Ac, Ad, Bc, Bd});
 
-	size_t branch1 = func.pushCond(probe_Ac & ~probe_Bc);
+	size_t branch1 = func.pushCond(probe_Ac && !probe_Bc);
 	func.conds[branch1].req(Sd, expr_s);
-	func.conds[branch1].req(Sc, Expression::intOf(0));
+	func.conds[branch1].req(Sc, Expression::boolOf(false));
 	func.conds[branch1].mem(ci, expr_co);
 	func.conds[branch1].ack({Bc, Bd});
 
-	size_t branch2 = func.pushCond(~probe_Ac & probe_Bc);
+	size_t branch2 = func.pushCond(!probe_Ac && probe_Bc);
 	func.conds[branch2].req(Sd, expr_s);
-	func.conds[branch2].req(Sc, Expression::intOf(0));
+	func.conds[branch2].req(Sc, Expression::boolOf(false));
 	func.conds[branch2].mem(ci, expr_co);
 	func.conds[branch2].ack({Ac, Ad});
 
-	size_t branch3 = func.pushCond(probe_Ac & probe_Bc & (expr_co != expr_ci));
+	size_t branch3 = func.pushCond(probe_Ac && probe_Bc && (expr_co != expr_ci));
 	func.conds[branch3].req(Sd, expr_s);
-	func.conds[branch3].req(Sc, Expression::intOf(0));
+	func.conds[branch3].req(Sc, Expression::boolOf(false));
 	func.conds[branch3].mem(ci, expr_co);
 
-	size_t branch4 = func.pushCond(probe_Ac & probe_Bc & (expr_co == expr_ci));
+	size_t branch4 = func.pushCond(probe_Ac && probe_Bc && (expr_co == expr_ci));
 	func.conds[branch4].req(Sd, expr_s);
-	func.conds[branch4].req(Sc, Expression::intOf(1));
+	func.conds[branch4].req(Sc, Expression::boolOf(true));
 	func.conds[branch4].mem(ci, Expression::intOf(0));
 	func.conds[branch4].ack({Ac, Ad, Bc, Bd});
 
@@ -328,220 +327,4 @@ TEST(ModuleSynthesis, FullAdder) {
 
 	string verilog = synthesizeVerilogFromFunc(func).to_string();
 }
-
-TEST(ModuleSynthesis, ChannelProbes) {
-	MockNetlist fn;
-	Operand A = Operand::varOf(fn.netIndex("A", true));
-	Operand B = Operand::varOf(fn.netIndex("B", true));
-	Operand x = Operand::varOf(fn.netIndex("x", true));  // non-channel local var/reg
-	Expression expr_A(A);
-	Expression expr_B(B);
-	Expression expr_x(x);
-
-	MockNetlist mod;
-	mod.netIndex("_random_offset", true);  // For verification, ensure fn->mod aren't 1:1
-	Operand A_valid = Operand::varOf(mod.netIndex("A_valid", true));
-	Operand B_valid = Operand::varOf(mod.netIndex("B_valid", true));
-	Operand A_data = Operand::varOf(mod.netIndex("A_data", true));
-	Operand B_data = Operand::varOf(mod.netIndex("B_data", true));
-	Operand x_data = Operand::varOf(mod.netIndex("x", true));  // non-channel local var
-	Expression expr_A_valid(A_valid);
-	Expression expr_B_valid(B_valid);
-	Expression expr_A_data(A_data);
-	Expression expr_B_data(B_data);
-	Expression expr_x_data(x_data);
-
-	Mapping<size_t> ChannelValid(-1, true), ChannelData(-1, true);
-	ChannelValid.set(A.index, A_valid.index);
-	ChannelValid.set(B.index, B_valid.index);
-	ChannelData.set(A.index, A_data.index);
-	ChannelData.set(B.index, B_data.index);
-	ChannelData.set(x.index, x_data.index);
-
-	Expression probe_A = arithmetic::call("probe", {A});
-	Expression probe_B = arithmetic::call("probe", {B});
-
-	// Base case
-	Expression valid_before = isValid(probe_A);
-	Expression valid_target = expr_A_valid;
-	valid_target.minimize();
-	Expression valid_after = synthesizeExpressionProbes(valid_before, ChannelValid, ChannelData);
-
-	EXPECT_TRUE(areSame(valid_after, valid_target))
-		<< endl << "BEFORE: " << valid_before
-		<< endl << "AFTER: " << valid_after
-		<< endl << "TARGET: " << valid_target;
-
-	// Base case
-	Expression valid2_before = probe_A;
-	Expression valid2_target = expr_A_data;
-	valid2_target.minimize();
-	Expression valid2_after = synthesizeExpressionProbes(valid2_before, ChannelValid, ChannelData);
-
-	EXPECT_TRUE(areSame(valid2_after, valid2_target))
-		<< endl << "BEFORE: " << valid2_before
-		<< endl << "AFTER: " << valid2_after
-		<< endl << "TARGET: " << valid2_target;
-
-
-
-	Expression zero = Expression::intOf(0);
-	Expression data_before = (probe_A == zero);
-	Expression data_target = expr_A_valid & (expr_A_data == zero);
-	data_target.minimize();
-	Expression data_after = synthesizeExpressionProbes(data_before, ChannelValid, ChannelData);
-
-	EXPECT_TRUE(areSame(data_after, data_target))
-		<< endl << "BEFORE: " << data_before
-		<< endl << "AFTER: " << data_after
-		<< endl << "TARGET: " << data_target;
-
-
-	//// Masked Addition
-	//// "Keep A’s lower byte[-ish] if it’s real, then increment."
-	// (A & 0xF7) + 1
-	Expression f7 = Expression::intOf(0xf7);
-	Expression one = Expression::intOf(1);
-	Expression ma2_before = (probe_A && f7) + one;
-	Expression ma2_target = (expr_A_data && f7) + one;
-	ma2_target.minimize();
-	Expression ma2_after = synthesizeExpressionProbes(ma2_before, ChannelValid, ChannelData);
-
-	EXPECT_TRUE(areSame(ma2_after, ma2_target))
-		<< endl << "BEFORE: " << ma2_before
-		<< endl << "AFTER: " << ma2_after
-		<< endl << "TARGET: " << ma2_target;
-
-	//// Masked Addition
-	//// "Keep A’s lower byte[-ish] if it’s real, then increment."
-	// (A & 0xF7) + 1
-	Expression ma_before = isValid((probe_A && f7) + one);
-	Expression ma_target = expr_A_valid;
-	ma_target.minimize();
-	Expression ma_after = synthesizeExpressionProbes(ma_before, ChannelValid, ChannelData);
-
-	EXPECT_TRUE(areSame(ma_after, ma_target))
-		<< endl << "BEFORE: " << ma_before
-		<< endl << "AFTER: " << ma_after
-		<< endl << "TARGET: " << ma_target;
-
-
-
-	//// Bitwise Inversion
-	//// "Negate only the known."
-	// ~(A | B)
-	Expression bi_before = ~(probe_A | probe_B);
-	Expression bi_target = ~(expr_A_valid | expr_B_valid);  //TODO: ???
-	bi_target.minimize();
-	Expression bi_after = synthesizeExpressionProbes(bi_before, ChannelValid, ChannelData);
-
-	EXPECT_TRUE(areSame(bi_after, bi_target))
-		<< endl << "BEFORE: " << bi_before
-		<< endl << "AFTER: " << bi_after
-		<< endl << "TARGET: " << bi_target;
-
-	//// Bitwise Inversion 2
-	//// "Negate only the known."
-	// ~(A == 3 | B == 6)
-	Expression three = Expression::intOf(3);
-	Expression six = Expression::intOf(6);
-	Expression bi2_before = ~((probe_A == three) | (probe_B == six));
-	Expression bi2_target = ~((expr_A_valid & (expr_A_data == three)) | (expr_B_valid & (expr_B_data == six)));
-	bi2_target.minimize();
-	Expression bi2_after = synthesizeExpressionProbes(bi2_before, ChannelValid, ChannelData);
-
-	EXPECT_TRUE(areSame(bi2_after, bi2_target))
-		<< endl << "BEFORE: " << bi2_before
-		<< endl << "AFTER: " << bi2_after
-		<< endl << "TARGET: " << bi2_target;
-
-	//// Deep Boolean, Top Arithmetic
-	//// "The logic part is fragile; Z is solid."
-	// ((A < 3) && (B > 2)) + B
-	Expression dbta_before = (((probe_A + probe_B) < 3) & (probe_B > 2)) | probe_B;
-	//Expression dbta_target = ((expr_A_valid && (expr_A_data < 3)) && (expr_B_valid && (expr_B_data > 2))) + expr_B_valid;
-	Expression dbta_target = (expr_A_valid & expr_B_valid & (((expr_A_data + expr_B_data) < 3) & (expr_B_data > 2))) | expr_B_valid;
-	dbta_target.minimize();
-	Expression dbta_after = synthesizeExpressionProbes(dbta_before, ChannelValid, ChannelData);
-
-	EXPECT_TRUE(areSame(dbta_after, dbta_target))
-		<< endl << "BEFORE: " << dbta_before
-		<< endl << "AFTER: " << dbta_after
-		<< endl << "TARGET: " << dbta_target;
-
-	//TODO:
-	//// Indexing Time
-	//// "The array is stable, but not your index math."
-	// arr[B + 2]
-	//Expression it_before = expr_x[probe_A + 2];  //arithmetic::evaluate()
-	//Expression it_target = expr_x[(expr_A_valid && expr_A_data) + 2];
-	//it_target.minimize();
-	//Expression it_after = synthesizeExpressionProbes(it_before, ChannelValid, ChannelData);
-
-	//EXPECT_TRUE(areSame(it_after, it_target))
-	//	<< endl << "BEFORE: " << it_before
-	//	<< endl << "TARGET: " << it_target
-	//	<< endl << "AFTER: " << it_after;
-
-	//// Return of the DAG
-	//// "Compute once, reuse — but only if it was valid."
-	// T = (A + B);
-	// U = (T * 2) + (T >> 1);
-}
-
-
-//TEST(ModuleSynthesis, ChannelProbes2) {
-//	MockNetlist fn;
-//	Operand A = Operand::varOf(fn.netIndex("A", true));
-//	Operand B = Operand::varOf(fn.netIndex("B", true));
-//	Operand C = Operand::varOf(fn.netIndex("C", true));
-//	Operand x = Operand::varOf(fn.netIndex("x", true));
-//	Expression expr_A(A);
-//	Expression expr_B(B);
-//	Expression expr_C(C);
-//	Expression expr_x(x);
-//
-//	MockNetlist mod;
-//	mod.netIndex("_random_offset", true);  // For verification, ensure fn->mod aren't 1:1
-//	Operand A_valid = Operand::varOf(mod.netIndex("A_valid", true));
-//	Operand B_valid = Operand::varOf(mod.netIndex("B_valid", true));
-//	Operand C_valid = Operand::varOf(mod.netIndex("C_valid", true));
-//	Operand A_data = Operand::varOf(mod.netIndex("A_data", true));
-//	Operand B_data = Operand::varOf(mod.netIndex("B_data", true));
-//	Operand C_data = Operand::varOf(mod.netIndex("C_data", true));
-//	Operand x_data = Operand::varOf(mod.netIndex("x", true));  //TODO: x_data?
-//	Expression expr_A_valid(A_valid);
-//	Expression expr_B_valid(B_valid);
-//	Expression expr_C_valid(C_valid);
-//	Expression expr_A_data(A_data);
-//	Expression expr_B_data(B_data);
-//	Expression expr_C_data(C_data);
-//	Expression expr_x_data(A_data);
-//
-//	mapping ChannelValid, ChannelData;
-//	ChannelValid.set(A.index, A_valid.index);
-//	ChannelValid.set(B.index, B_valid.index);
-//	ChannelValid.set(C.index, C_valid.index);
-//	ChannelData.set(A.index, A_data.index);
-//	ChannelData.set(B.index, B_data.index);
-//	ChannelData.set(C.index, C_data.index);
-//	ChannelData.set(x.index, x_data.index);
-//
-//	Expression probe_A = arithmetic::call("probe", {A});
-//	Expression probe_B = arithmetic::call("probe", {B});
-//	Expression probe_C = arithmetic::call("probe", {C});
-//	Expression three = Expression::intOf(3);
-//	Expression six = Expression::intOf(6);
-//
-//	Expression target = ((expr_B_valid || (expr_A_valid && (expr_A_data == three)) || (expr_x_data != six))) && expr_C_valid;
-//	Expression before = (probe_B || (probe_A == three) || (expr_x != six)) && probe_C;
-//	Expression after = synthesizeExpressionProbes(before, ChannelValid, ChannelData);
-//
-//	target.minimize();
-//	EXPECT_TRUE(areSame(after, target))
-//		<< endl << "BEFORE: " << before
-//		<< endl << "TARGET: " << target
-//		<< endl << "AFTER: " << after;
-//}
-
 
