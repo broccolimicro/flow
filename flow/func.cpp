@@ -50,8 +50,8 @@ std::ostream& operator<<(std::ostream& os, const Net& net) {
 			case Net::Purpose::OUT: purpose = "OUT"; break;
 			case Net::Purpose::REG: purpose = "REG"; break;
 			case Net::Purpose::COND: purpose = "COND"; break;
-			case Net::Purpose::NONE:
-			default: purpose = "NONE";
+			case Net::Purpose::WIRE:
+			default: purpose = "WIRE";
 		}
     return os << "Net(name:" << net.name
               << ", purpose:"  << purpose
@@ -211,6 +211,17 @@ Input::Input(int uid) {
 Input::~Input() {
 }
 
+Instance::Instance() {
+}
+
+Instance::Instance(string type, vector<Expression> ports) {
+	this->type = type;
+	this->ports = ports;
+}
+
+Instance::~Instance() {
+}
+
 Func::Func() {
 }
 
@@ -274,7 +285,7 @@ std::ostream& operator<<(std::ostream& os, const Func& func) {
 		const auto& net = func.nets[i];
 		const char* purpose = "UNKNOWN";
 		switch (net.purpose) {
-			case Net::Purpose::NONE: purpose = "NONE"; break;
+			case Net::Purpose::WIRE: purpose = "WIRE"; break;
 			case Net::Purpose::IN: purpose = "IN"; break;
 			case Net::Purpose::OUT: purpose = "OUT"; break;
 			case Net::Purpose::REG: purpose = "REG"; break;

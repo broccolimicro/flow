@@ -33,14 +33,14 @@ struct Type {
 
 struct Net {
 	enum Purpose {
-		NONE = 0,
+		WIRE = 0,
 		IN = 1,
 		OUT = 2,
 		REG = 3,
 		COND = 4,
 	};
 
-	Net(string name="", Type type=Type(Type::TypeName::BITS, 1), Purpose purpose=Purpose::NONE);
+	Net(string name="", Type type=Type(Type::TypeName::BITS, 1), Purpose purpose=Purpose::WIRE);
 	~Net();
 
 	string name;
@@ -97,6 +97,18 @@ struct Input {
 	vector<int> ack;
 };
 
+struct Instance {
+	string type;
+	string name;
+	vector<Expression> ports;
+
+	string comment;
+
+	Instance();
+	Instance(string type, vector<Expression> ports=vector<Expression>());
+	~Instance();
+};
+
 struct Func {
 	Func();
 	~Func();
@@ -104,15 +116,15 @@ struct Func {
 	string name;
 
 	vector<Net> nets;
-
 	vector<Condition> conds;
+	vector<Instance> inst;
 
 	int netIndex(string name) const;
 	int netIndex(string name, bool define=false);
 	string netAt(int uid) const;
 	int netCount() const;
 
-	Operand pushNet(string name, Type type=Type(Type::TypeName::BITS, 1), Net::Purpose purpose=Net::Purpose::NONE);
+	Operand pushNet(string name, Type type=Type(Type::TypeName::BITS, 1), Net::Purpose purpose=Net::Purpose::WIRE);
 	int pushCond(Expression valid);
 	friend std::ostream& operator<<(std::ostream& os, const Func& f);
 };

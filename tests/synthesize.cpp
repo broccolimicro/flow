@@ -328,3 +328,27 @@ TEST(ModuleSynthesis, FullAdder) {
 	string verilog = synthesizeVerilogFromFunc(func).to_string();
 }
 
+TEST(ModuleSynthesis, Instance) {
+	Func func;
+	func.name = "instance_test";
+	Expression A = func.pushNet("A", Type(Type::TypeName::FIXED, 1), flow::Net::IN);
+	Expression B = func.pushNet("B", Type(Type::TypeName::FIXED, 1), flow::Net::IN);
+	Expression S = func.pushNet("S", Type(Type::TypeName::FIXED, 1), flow::Net::OUT);
+	Expression Ci = func.pushNet("Ci", Type(Type::TypeName::FIXED, 1), flow::Net::IN);
+	Expression Co = func.pushNet("Co", Type(Type::TypeName::FIXED, 1), flow::Net::OUT);
+	Expression s = func.pushNet("s", Type(Type::TypeName::FIXED, 1), flow::Net::WIRE);
+	Expression co = func.pushNet("co", Type(Type::TypeName::FIXED, 1), flow::Net::WIRE);
+	
+
+	func.inst.push_back(flow::Instance("add", {A, B, Ci, s, co}));
+	func.inst.back().name = "adder";
+	func.inst.back().comment = "this is an adder";
+
+	size_t branch0 = func.pushCond(Expression::boolOf(true));
+	func.conds[branch0].req(S.top, s);
+	func.conds[branch0].req(Co.top, co);
+	func.conds[branch0].ack({A.top, B.top, Ci.top});
+
+	string verilog = synthesizeVerilogFromFunc(func).to_string();
+}
+

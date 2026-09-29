@@ -66,6 +66,12 @@ void synthesizeChannel(clocked::Module &mod, const Net &net, clocked::Statement 
 		channel.data = mod.pushNet(net.name+"_data", synthesizeChannelType(net.type), clocked::Net::Purpose::REG);
 		resetBlock.sub.push_back(clocked::Statement(channel.data, Expression::intOf(0)));
 
+	} else if (net.purpose == flow::Net::WIRE) {
+		channel.purpose = clocked::Channel::WIRE;
+		channel.valid = -1;  //mod.pushNet(net.name+"_valid", wire, clocked::Net::Purpose::WIRE);
+		channel.ready = -1;  //TODO: these could be wires for debug or mere modelling in cocotb harness
+		channel.data = mod.pushNet(net.name+"_data", synthesizeChannelType(net.type), clocked::Net::Purpose::WIRE);
+
 	//TODO: migrate out of synthesizeChannel(), into synthesizeModuleFromFunc(), if/when COND's are no longer detected in netlist?
 	} else if (net.purpose == flow::Net::COND) {
 		channel.purpose = clocked::Channel::COND;
@@ -254,6 +260,28 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 				Expression::varOf(mod.chans.back().data)
 			})
 		);
+	}
+
+	for (const auto &inst : func.inst) {
+		vector<Expression> ports;
+		for (const auto &port : inst.ports) {
+			Expression portExpr(port);
+			//cout << "reg from: " << portExpr.to_string(true) << endl;
+			portExpr.substituteConst(constStruct);
+			portExpr.substitute(nets, structs);
+			portExpr = member(portExpr, "data");
+			//cout << "reg from: " << portExpr.to_string(true) << endl;
+
+			portExpr.minimize(rules);
+			//cout << "reg from: " << portExpr.to_string(true) << endl;
+			portExpr.minimize();
+			minimizeTypes(mod, portExpr);
+			portExpr.minimize();
+			ports.push_back(portExpr);
+		}
+		mod.inst.push_back(clocked::Instance(inst.type, ports));
+		mod.inst.back().name = inst.name;
+		mod.inst.back().comment = inst.comment;
 	}
 
 	for (const auto &cond : func.conds) {
