@@ -111,6 +111,7 @@ arithmetic::RuleSet buildRules() {
 		(construct("ValData", {a, b}) / construct("ValData", {c, d})) > construct("ValData", {a&c, b/d}),
 		(construct("ValData", {a, b}) % construct("ValData", {c, d})) > construct("ValData", {a&c, b%d}),
 		
+		(isNegative(construct("ValData", {a, b}))) > construct("ValData", {a, isNegative(b)}),
 		(construct("ValData", {a, b}) == construct("ValData", {c, d})) > construct("ValData", {a&c, b==d}),
 		(construct("ValData", {a, b}) != construct("ValData", {c, d})) > construct("ValData", {a&c, b!=d}),
 		(construct("ValData", {a, b}) < construct("ValData", {c, d})) > construct("ValData", {a&c, b<d}),
