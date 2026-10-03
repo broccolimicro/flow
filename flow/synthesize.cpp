@@ -127,7 +127,7 @@ arithmetic::RuleSet buildRules() {
 	});
 }
 
-void minimizeTypes(const clocked::Module &mod, arithmetic::OperationSet expr) {
+void minimizeTypes(clocked::Module &mod, arithmetic::OperationSet expr) {
 	using namespace arithmetic;
 
 	for (const auto &idx : expr.exprIndex()) {
@@ -146,6 +146,26 @@ void minimizeTypes(const clocked::Module &mod, arithmetic::OperationSet expr) {
 			// built-in functions
 			if (term == "rand") {
 				op.operands[0].cnst.sval = "random";
+				modified = true;
+			} else {
+				vector<Expression> ports;
+				for (size_t i = 1; i < op.operands.size(); i++) {
+					Expression portExpr(arithmetic::member(arithmetic::subExpr(expr, op.operands[i]), "data"));
+					cout << "Before minimize " << portExpr.to_string(true) << endl;
+					//portExpr.minimize(rules);
+					portExpr.minimize();
+					ports.push_back(portExpr);
+					cout << "After minimize " << portExpr.to_string(true) << endl;
+				}
+				size_t net = mod.pushNet("thing", clocked::Type(), clocked::Net::Purpose::WIRE);
+				ports.push_back(Expression::varOf(net));
+				mod.inst.push_back(clocked::Instance(term, ports));
+
+				op.func = arithmetic::Operation::STRUCT;
+				op.operands.clear();
+				op.operands.push_back(arithmetic::Operand::labelOf("ValData"));
+				op.operands.push_back(arithmetic::Operand::vdd());
+				op.operands.push_back(arithmetic::Operand::varOf(net));
 				modified = true;
 			}
 		} else if (op.func == arithmetic::Operation::VALIDITY) {
@@ -230,7 +250,7 @@ void minimizeTypes(const clocked::Module &mod, arithmetic::OperationSet expr) {
 }
 
 clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
-	auto rules = buildRules();
+	static const arithmetic::RuleSet rewriteRules = arithmetic::rewriteCanonical() + arithmetic::rewriteSimple() + buildRules();
 
 	clocked::Module mod;
 	mod.name = func.name;
@@ -272,9 +292,8 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 			portExpr = member(portExpr, "data");
 			//cout << "reg from: " << portExpr.to_string(true) << endl;
 
-			portExpr.minimize(rules);
+			portExpr.minimize(rewriteRules);
 			//cout << "reg from: " << portExpr.to_string(true) << endl;
-			portExpr.minimize();
 			minimizeTypes(mod, portExpr);
 			portExpr.minimize();
 			ports.push_back(portExpr);
@@ -295,9 +314,8 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 			regExpr = member(regExpr, "data");
 			//cout << "reg from: " << regExpr.to_string(true) << endl;
 
-			regExpr.minimize(rules);
+			regExpr.minimize(rewriteRules);
 			//cout << "reg from: " << regExpr.to_string(true) << endl;
-			regExpr.minimize();
 			minimizeTypes(mod, regExpr);
 			regExpr.minimize();
 			//cout << "reg to: " << regExpr.to_string(true) << endl;
@@ -321,9 +339,8 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 			request = member(request, "data");
 			//cout << "out from: " << request.to_string(true) << endl;
 
-			request.minimize(rules);
+			request.minimize(rewriteRules);
 			//cout << "out from: " << request.to_string(true) << endl;
-			request.minimize();
 			minimizeTypes(mod, request);
 			request.minimize();
 			//cout << "out to: " << request.to_string(true) << endl;
@@ -357,8 +374,7 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, bool debug) {
 		branch_valid.substituteConst(constStruct);
 		branch_valid.substitute(nets, structs);
 
-		branch_valid.minimize(rules);
-		branch_valid.minimize();
+		branch_valid.minimize(rewriteRules);
 		minimizeTypes(mod, branch_valid);
 		branch_valid.minimize();
 

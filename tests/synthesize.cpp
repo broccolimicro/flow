@@ -345,7 +345,7 @@ TEST(ModuleSynthesis, Instance) {
 	func.inst.back().comment = "this is an adder";
 
 	size_t branch0 = func.pushCond(Expression::boolOf(true));
-	func.conds[branch0].req(S.top, s);
+	func.conds[branch0].req(S.top, arithmetic::call("myFunc", {s}));
 	func.conds[branch0].req(Co.top, co);
 	func.conds[branch0].ack({A.top, B.top, Ci.top});
 
