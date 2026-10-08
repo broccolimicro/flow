@@ -42,7 +42,7 @@ void drawFlowDiagram(const Func &func) {
 }
 
 void expectEq(std::string expected, std::string actual) {
-	auto diff = lineDiff(expected, actual);
+	auto diff = lineDiff(actual, expected);
 	EXPECT_TRUE(isMatch(diff)) << diff;
 }
 
@@ -928,7 +928,8 @@ module instance_test (
 	wire co_data;
 	wire branch_0_valid;
 	wire branch_0_ready;
-	wire thing;
+	wire net0;
+	wire net1;
 	assign S_valid = S_valid_reg;
 	assign S_data = S_data_reg;
 	assign Co_valid = Co_valid_reg;
@@ -945,7 +946,7 @@ module instance_test (
 			Co_valid_reg <= 0;
 			Co_data_reg <= 0;
 		end else if (branch_0_valid&&(S_ready||!S_valid_reg)&&(Co_ready||!Co_valid_reg)) begin
-			S_data_reg <= thing;
+			S_data_reg <= net1;
 			S_valid_reg <= 1;
 			Co_data_reg <= co_data;
 			Co_valid_reg <= 1;
@@ -958,8 +959,8 @@ module instance_test (
 			end
 		end
 	end
-	add adder(A_data, B_data, Ci_data, s_data, co_data);
-	myFunc func(s_data, thing);
+	add adder(A_valid, A_data, B_valid, B_data, Ci_valid, Ci_data, s_valid, s_data, co_valid, co_data);
+	myFunc inst0(1, s_data, net0, net1);
 endmodule)""";
 
 	Func func;
@@ -982,9 +983,25 @@ endmodule)""";
 	func.conds[branch0].req(Co.top, co);
 	func.conds[branch0].ack({A.top, B.top, Ci.top});
 
+	Func myFuncFlow;
+	myFuncFlow.name = "myFunc";
+	myFuncFlow.pushNet("s", Type(Type::TypeName::FIXED, 1), flow::Net::IN);
+	myFuncFlow.pushNet("out", Type(Type::TypeName::FIXED, 1), flow::Net::OUT);
+
+	clocked::Module myFuncMod("myFunc");
+	myFuncMod.chans.push_back(clocked::Channel("s", clocked::Channel::IN));
+	myFuncMod.chans.back().valid = myFuncMod.pushNet("s_valid", clocked::Type(clocked::Type::BITS, 1), clocked::Net::IN, myFuncMod.chans.size()-1);
+	myFuncMod.chans.back().data = myFuncMod.pushNet("s_data", clocked::Type(clocked::Type::FIXED, 1), clocked::Net::IN, myFuncMod.chans.size()-1);
+
+	myFuncMod.chans.push_back(clocked::Channel("out", clocked::Channel::OUT));
+	myFuncMod.chans.back().valid = myFuncMod.pushNet("out_valid", clocked::Type(clocked::Type::BITS, 1), clocked::Net::OUT, myFuncMod.chans.size()-1);
+	myFuncMod.chans.back().data = myFuncMod.pushNet("out_data", clocked::Type(clocked::Type::FIXED, 1), clocked::Net::OUT, myFuncMod.chans.size()-1);
+
 	FuncSet lib;
 	ModSet rtl;
+	lib.funcs.push_back(myFuncFlow);
 	lib.funcs.push_back(func);
+	rtl.mods.push_back(myFuncMod);
 	TestLinker linker(lib, rtl);
 	clocked::Module mod = synthesizeModuleFromFunc(func, &linker);
 

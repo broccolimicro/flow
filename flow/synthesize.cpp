@@ -56,58 +56,60 @@ clocked::Type synthesizeChannelType(const Type &type) {
 void resetValidReg(clocked::Statement &block, const clocked::Channel &chan) {
 	block.sub.push_back(
 		clocked::Statement(false, {
-			clocked::Statement(chan.valid, Expression::intOf(0)),
+			clocked::Statement(chan.validReg, Expression::intOf(0)),
 		}, Expression::varOf(chan.ready))
 	);
 }
 
-
 void synthesizeChannel(clocked::Module &mod, const Net &net, clocked::Statement &resetBlock) {
-	static const clocked::Type wire(clocked::Type::TypeName::BITS, 1);
-	clocked::Channel channel;
-	channel.name = net.name;
+	static const clocked::Type wireType(clocked::Type::TypeName::BITS, 1);
+	static const clocked::Type boolType(clocked::Type::TypeName::FIXED, 1);
+
+	size_t uid = mod.chans.size();
+	mod.chans.push_back(clocked::Channel());
+
+	clocked::Channel channel(net.name);
 	if (net.purpose == flow::Net::IN) {
 		channel.purpose = clocked::Channel::IN;
-		channel.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::Purpose::IN);
-		channel.ready = mod.pushNet(net.name+"_ready", wire, clocked::Net::Purpose::OUT);
-		channel.data = mod.pushNet(net.name+"_data", synthesizeChannelType(net.type), clocked::Net::Purpose::IN);
-
+		channel.valid = mod.pushNet(net.name+"_valid", wireType, clocked::Net::Purpose::IN, uid);
+		channel.ready = mod.pushNet(net.name+"_ready", wireType, clocked::Net::Purpose::OUT, uid);
+		channel.data  = mod.pushNet(net.name+"_data", synthesizeChannelType(net.type), clocked::Net::Purpose::IN, uid);
 	} else if (net.purpose == flow::Net::OUT) {
 		channel.purpose = clocked::Channel::OUT;
-		size_t valid_wire = mod.pushNet(net.name+"_valid", wire, clocked::Net::Purpose::OUT);
-		size_t valid_reg = mod.pushNet(net.name+"_valid_reg", clocked::Type(clocked::Type::TypeName::FIXED, 1), clocked::Net::Purpose::REG);
-		channel.valid = valid_reg;
-		mod.stmts.push_back(clocked::Statement(valid_wire, Expression::varOf(valid_reg), true));
-		resetBlock.sub.push_back(clocked::Statement(channel.valid, Expression::intOf(0)));
+		channel.valid    = mod.pushNet(net.name+"_valid", wireType, clocked::Net::Purpose::OUT, uid);
+		channel.validReg = mod.pushNet(net.name+"_valid_reg", boolType, clocked::Net::Purpose::REG, uid);
+		channel.ready    = mod.pushNet(net.name+"_ready", wireType, clocked::Net::Purpose::IN, uid);
+		channel.data     = mod.pushNet(net.name+"_data", synthesizeChannelType(net.type), clocked::Net::Purpose::OUT, uid);
+		channel.dataReg  = mod.pushNet(net.name+"_data_reg", synthesizeChannelType(net.type), clocked::Net::Purpose::REG, uid);
 
-		channel.ready = mod.pushNet(net.name+"_ready", wire, clocked::Net::Purpose::IN);
-
-		size_t data = mod.pushNet(net.name+"_data", synthesizeChannelType(net.type), clocked::Net::Purpose::OUT);
-		channel.data = mod.pushNet(net.name+"_data_reg", synthesizeChannelType(net.type), clocked::Net::Purpose::REG);
-		mod.stmts.push_back(clocked::Statement(data, Expression::varOf(channel.data), true));
-		resetBlock.sub.push_back(clocked::Statement(channel.data, Expression::intOf(0)));
-		
+		mod.stmts.push_back(clocked::Statement(channel.valid, Expression::varOf(channel.validReg), true));
+		mod.stmts.push_back(clocked::Statement(channel.data, Expression::varOf(channel.dataReg), true));
+		resetBlock.sub.push_back(clocked::Statement(channel.validReg, Expression::intOf(0)));
+		resetBlock.sub.push_back(clocked::Statement(channel.dataReg, Expression::intOf(0)));
 	} else if (net.purpose == flow::Net::REG) {
 		channel.purpose = clocked::Channel::REG;
-		channel.valid = -1;  //mod.pushNet(net.name+"_valid", wire, clocked::Net::Purpose::WIRE);
-		channel.ready = -1;  //TODO: these could be wires for debug or mere modelling in cocotb harness
-		channel.data = mod.pushNet(net.name+"_data", synthesizeChannelType(net.type), clocked::Net::Purpose::REG);
-		resetBlock.sub.push_back(clocked::Statement(channel.data, Expression::intOf(0)));
+		channel.dataReg = mod.pushNet(net.name+"_data", synthesizeChannelType(net.type), clocked::Net::Purpose::REG, uid);
+		channel.data    = channel.dataReg;
 
+		// TODO(steven.kneiser) valid and ready could be wires for debug or mere modelling in cocotb harness
+		// channel.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::Purpose::WIRE);
+
+		resetBlock.sub.push_back(clocked::Statement(channel.dataReg, Expression::intOf(0)));
 	} else if (net.purpose == flow::Net::WIRE) {
 		channel.purpose = clocked::Channel::WIRE;
-		channel.valid = -1;  //mod.pushNet(net.name+"_valid", wire, clocked::Net::Purpose::WIRE);
-		channel.ready = -1;  //TODO: these could be wires for debug or mere modelling in cocotb harness
-		channel.data = mod.pushNet(net.name+"_data", synthesizeChannelType(net.type), clocked::Net::Purpose::WIRE);
+		channel.data  = mod.pushNet(net.name+"_data", synthesizeChannelType(net.type), clocked::Net::Purpose::WIRE, uid);
 
-	//TODO: migrate out of synthesizeChannel(), into synthesizeModuleFromFunc(), if/when COND's are no longer detected in netlist?
+		// TODO(steven.kneiser) these could be wires for debug or mere modelling in cocotb harness
+		// channel.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::Purpose::WIRE);
+		// TODO(steven.kneiser) migrate out of synthesizeChannel(), into
+		// synthesizeModuleFromFunc(), if/when COND's are no longer detected in netlist?
 	} else if (net.purpose == flow::Net::COND) {
 		channel.purpose = clocked::Channel::COND;
-		channel.valid = mod.pushNet(net.name+"_valid", wire, clocked::Net::Purpose::WIRE);
-		channel.ready = mod.pushNet(net.name+"_ready", wire, clocked::Net::Purpose::WIRE);
-		channel.data = -1;
+		channel.valid = mod.pushNet(net.name+"_valid", wireType, clocked::Net::Purpose::WIRE, uid);
+		channel.ready = mod.pushNet(net.name+"_ready", wireType, clocked::Net::Purpose::WIRE, uid);
+		channel.data  = -1;
 	}
-	mod.chans.push_back(channel);
+	mod.chans[uid] = channel;
 }
 
 arithmetic::RuleSet buildRules() {
@@ -121,42 +123,83 @@ arithmetic::RuleSet buildRules() {
 
 	// All of the simplification rules for Val-Data
 	return RuleSet({
-		memberCall(construct("ValData", {a, b}), "probe", {}) > construct("ValData", {a, b}), 
-		member(construct("ValData", {a, b}), "val") > a,
-		member(construct("ValData", {a, b}), "data") > b,
-		(isValid(construct("ValData", {a, b}))) > a,
-		(~construct("ValData", {a, b})) > (~a),
-		(construct("ValData", {a, b}) & construct("ValData", {c, d})) > (a&c),
-		(construct("ValData", {a, b}) | construct("ValData", {c, d})) > (a|c),
-		(construct("ValData", {a, b}) & c) > (a&c),
-		(construct("ValData", {a, b}) | c) > (a|c),
-		(a & construct("ValData", {c, d})) > (a&c),
-		(a | construct("ValData", {c, d})) > (a|c),
+		memberCall(construct("Bundle", {a, b}), "probe", {}) > construct("Bundle", {a, b}), 
+		member(construct("Bundle", {a, b}), "valid") > a,
+		member(construct("Bundle", {a, b}), "data") > b,
+		(isValid(construct("Bundle", {a, b}))) > a,
+		(~construct("Bundle", {a, b})) > (~a),
+		(construct("Bundle", {a, b}) & construct("Bundle", {c, d})) > (a&c),
+		(construct("Bundle", {a, b}) | construct("Bundle", {c, d})) > (a|c),
+		(construct("Bundle", {a, b}) & c) > (a&c),
+		(construct("Bundle", {a, b}) | c) > (a|c),
+		(a & construct("Bundle", {c, d})) > (a&c),
+		(a | construct("Bundle", {c, d})) > (a|c),
 
-		(isTrue(construct("ValData", {a, b}))) > (a&&b),
-		(!construct("ValData", {a, b})) > construct("ValData", {a, !b}),
-		(construct("ValData", {a, b}) && construct("ValData", {c, d})) > construct("ValData", {a&c, b&&d}),
-		(construct("ValData", {a, b}) || construct("ValData", {c, d})) > construct("ValData", {(a&&b)|(c&&d)|(a&c), (a&&b)||(c&&d)}),
-		(booleanXor(construct("ValData", {a, b}), construct("ValData", {c, d}))) > construct("ValData", {a&c, booleanXor(b, d)}),
+		(isTrue(construct("Bundle", {a, b}))) > (a&&b),
+		(!construct("Bundle", {a, b})) > construct("Bundle", {a, !b}),
+		(construct("Bundle", {a, b}) && construct("Bundle", {c, d})) > construct("Bundle", {a&c, b&&d}),
+		(construct("Bundle", {a, b}) || construct("Bundle", {c, d})) > construct("Bundle", {(a&&b)|(c&&d)|(a&c), (a&&b)||(c&&d)}),
+		(booleanXor(construct("Bundle", {a, b}), construct("Bundle", {c, d}))) > construct("Bundle", {a&c, booleanXor(b, d)}),
 
-		(construct("ValData", {a, b}) + construct("ValData", {c, d})) > construct("ValData", {a&c, b+d}),
-		(construct("ValData", {a, b}) - construct("ValData", {c, d})) > construct("ValData", {a&c, b-d}),
-		(construct("ValData", {a, b}) * construct("ValData", {c, d})) > construct("ValData", {a&c, b*d}),
-		(construct("ValData", {a, b}) / construct("ValData", {c, d})) > construct("ValData", {a&c, b/d}),
-		(construct("ValData", {a, b}) % construct("ValData", {c, d})) > construct("ValData", {a&c, b%d}),
-		
-		(isNegative(construct("ValData", {a, b}))) > construct("ValData", {a, isNegative(b)}),
-		(construct("ValData", {a, b}) == construct("ValData", {c, d})) > construct("ValData", {a&c, b==d}),
-		(construct("ValData", {a, b}) != construct("ValData", {c, d})) > construct("ValData", {a&c, b!=d}),
-		(construct("ValData", {a, b}) < construct("ValData", {c, d})) > construct("ValData", {a&c, b<d}),
-		(construct("ValData", {a, b}) > construct("ValData", {c, d})) > construct("ValData", {a&c, b>d}),
-		(construct("ValData", {a, b}) <= construct("ValData", {c, d})) > construct("ValData", {a&c, b<=d}),
-		(construct("ValData", {a, b}) >= construct("ValData", {c, d})) > construct("ValData", {a&c, b>=d}),
+		(construct("Bundle", {a, b}) + construct("Bundle", {c, d})) > construct("Bundle", {a&c, b+d}),
+		(construct("Bundle", {a, b}) - construct("Bundle", {c, d})) > construct("Bundle", {a&c, b-d}),
+		(construct("Bundle", {a, b}) * construct("Bundle", {c, d})) > construct("Bundle", {a&c, b*d}),
+		(construct("Bundle", {a, b}) / construct("Bundle", {c, d})) > construct("Bundle", {a&c, b/d}),
+		(construct("Bundle", {a, b}) % construct("Bundle", {c, d})) > construct("Bundle", {a&c, b%d}),
+
+		(isNegative(construct("Bundle", {a, b}))) > construct("Bundle", {a, isNegative(b)}),
+		(construct("Bundle", {a, b}) == construct("Bundle", {c, d})) > construct("Bundle", {a&c, b==d}),
+		(construct("Bundle", {a, b}) != construct("Bundle", {c, d})) > construct("Bundle", {a&c, b!=d}),
+		(construct("Bundle", {a, b}) < construct("Bundle", {c, d})) > construct("Bundle", {a&c, b<d}),
+		(construct("Bundle", {a, b}) > construct("Bundle", {c, d})) > construct("Bundle", {a&c, b>d}),
+		(construct("Bundle", {a, b}) <= construct("Bundle", {c, d})) > construct("Bundle", {a&c, b<=d}),
+		(construct("Bundle", {a, b}) >= construct("Bundle", {c, d})) > construct("Bundle", {a&c, b>=d}),
 	});
+}
+
+std::string newInstanceName(const clocked::Module *mod, std::string prefix) {
+	size_t i = 0;
+	while (true) {
+		std::string name = prefix + ::to_string(i);
+		bool found = false;
+		for (const auto &inst : mod->inst) {
+			if (inst.name == name) {
+				found = true;
+				break;
+			}
+		}
+		if (not found) {
+			return name;
+		}
+		i++;
+	}
+}
+
+std::string newNetName(const clocked::Module *mod, std::string prefix) {
+	size_t i = 0;
+	while (true) {
+		std::string name = prefix + ::to_string(i);
+		bool found = false;
+		for (const auto &net : mod->nets) {
+			if (net.name == name) {
+				found = true;
+				break;
+			}
+		}
+		if (not found) {
+			return name;
+		}
+		i++;
+	}
 }
 
 Mapping<arithmetic::Operand> minimizeTypes(clocked::Module *mod, Linker *linker, arithmetic::OperationSet expr, std::vector<arithmetic::Operand> top) {
 	using namespace arithmetic;
+
+	static const arithmetic::RuleSet defaultRules = arithmetic::rewriteCanonical() + arithmetic::rewriteSimple();
+	static const arithmetic::RuleSet rewriteRules = defaultRules + buildRules();
+	auto typeMinimizer = std::bind(minimizeTypes, &mod, linker, std::placeholders::_1, std::placeholders::_2);
+
 
 	for (const auto &idx : expr.exprIndex()) {
 		arithmetic::Operation op = *expr.getExpr(idx.index);
@@ -176,24 +219,126 @@ Mapping<arithmetic::Operand> minimizeTypes(clocked::Module *mod, Linker *linker,
 				op.operands[0].cnst.sval = "random";
 				modified = true;
 			} else {
-				vector<Expression> ports;
+				// TODO(edward.bingham) Need a function to propagate type information through an expression
+				vector<Expression> flowPorts;
 				for (size_t i = 1; i < op.operands.size(); i++) {
-					Expression portExpr(arithmetic::member(arithmetic::subExpr(expr, op.operands[i]), "data"));
-					cout << "Before minimize " << portExpr.to_string(true) << endl;
-					//portExpr.minimize(rules);
-					portExpr.minimize();
-					ports.push_back(portExpr);
-					cout << "After minimize " << portExpr.to_string(true) << endl;
+					flowPorts.push_back(arithmetic::subExpr(expr, op.operands[i]));
 				}
-				size_t net = mod->pushNet("thing", clocked::Type(), clocked::Net::Purpose::WIRE);
-				ports.push_back(Expression::varOf(net));
-				mod->inst.push_back(clocked::Instance(term, ports));
+				Implementation impl = linker->find(Instance(term, flowPorts));
 
-				op.func = arithmetic::Operation::STRUCT;
-				op.operands.clear();
-				op.operands.push_back(arithmetic::Operand::labelOf("ValData"));
-				op.operands.push_back(arithmetic::Operand::vdd());
-				op.operands.push_back(arithmetic::Operand::varOf(net));
+				if (impl.mod == nullptr or impl.func == nullptr) {
+					error("", "unable to link flow to verilog for \'" + term + "\'", __FILE__, __LINE__);
+					continue;
+				}
+
+				Mapping<size_t> connect;
+				std::vector<Expression> clockedPorts;
+				for (size_t i = 0; i < impl.mod->nets.size(); i++) {
+					bool isInput = impl.mod->nets[i].purpose == clocked::Net::IN;
+					bool isOutput = impl.mod->nets[i].purpose == clocked::Net::OUT;
+
+					if (isInput or isOutput) {
+						int clockedChan = impl.mod->nets[i].chan;
+						std::string netName = impl.mod->nets[i].name;
+						if (clockedChan >= 0) {
+							netName = impl.mod->chans[clockedChan].name;
+						}
+
+						int flowNet = -1;
+						int flowPort = -1;
+						for (size_t j = 0; j < impl.func->nets.size(); j++) {
+							if (impl.func->nets[j].purpose == flow::Net::IN or
+								impl.func->nets[j].purpose == flow::Net::OUT) {
+								flowPort++;
+							}
+							if (impl.func->nets[j].name == netName) {
+								flowNet = j;
+								break;
+							}
+						}
+
+						if (flowNet < 0) {
+							error("", "unable to link port in verilog instantiation of flow function \'" + netName + "\'", __FILE__, __LINE__);
+							clockedPorts.push_back(Expression::undef());
+							continue;
+						}
+
+						Expression flowOp = Expression::undef();
+						if (flowPort >= 0 and flowPort < flowPorts.size()) {
+							flowOp = flowPorts[flowPort];
+						}
+						if (isOutput) {
+							size_t net = mod->pushNet(
+								newNetName(mod, "net"),
+								impl.mod->nets[i].type,
+								clocked::Net::Purpose::WIRE);
+
+							connect.set(i, net);
+							clockedPorts.push_back(Expression::varOf(net));
+						} else if (clockedChan < 0) {
+							clockedPorts.push_back(flowOp);
+						} else if (i == impl.mod->chans[clockedChan].valid) {
+							clockedPorts.push_back(arithmetic::member(flowOp, "valid"));
+						} else if (i == impl.mod->chans[clockedChan].ready) {
+							clockedPorts.push_back(arithmetic::member(flowOp, "ready"));
+						} else if (i == impl.mod->chans[clockedChan].data) {
+							clockedPorts.push_back(arithmetic::member(flowOp, "data"));
+						} else {
+							internal("", "improperly linked net \'" + netName + "\' in clocked module", __FILE__, __LINE__);
+							clockedPorts.push_back(flowOp);
+						}
+
+						//cout << "before port " << clockedPorts.size()-1 << " " << clockedPorts.back().to_string(true, *mod) << endl;
+						clockedPorts.back().minimize(rewriteRules);
+						//cout << "after port " << clockedPorts.size()-1 << " " << clockedPorts.back().to_string(true, *mod) << endl;
+					}
+				}
+
+				mod->inst.push_back(clocked::Instance(term, clockedPorts));
+				//cout << "pushing instance to module: " << term << "(";
+				//for (int k = 0; k < (int)clockedPorts.size(); k++) {
+				//	cout << clockedPorts[k].to_string(true) << ", ";
+				//}
+				//cout << ")" << endl;
+
+				mod->inst.back().name = newInstanceName(mod, "inst");
+
+				std::vector<size_t> funcOuts;
+				for (size_t j = 0; j < impl.func->nets.size(); j++) {
+					if (impl.func->nets[j].purpose == flow::Net::OUT) {
+						funcOuts.push_back(j);
+					}
+				}
+
+				if (funcOuts.empty()) {
+					op.func = arithmetic::Operation::STRUCT;
+					op.operands.clear();
+					op.operands.push_back(arithmetic::Operand::labelOf("Bundle"));
+					op.operands.push_back(arithmetic::Operand::vdd());
+					op.operands.push_back(arithmetic::Operand::undef());
+				} else if (funcOuts.size() == 1) {
+					op.func = arithmetic::Operation::STRUCT;
+					op.operands.clear();
+					op.operands.push_back(arithmetic::Operand::labelOf("Bundle"));
+					op.operands.push_back(impl.mod->chans[funcOuts[0]].hasValid() ?
+						arithmetic::Operand::varOf(connect.map(impl.mod->chans[funcOuts[0]].valid)) :
+						arithmetic::Operand::vdd());
+					op.operands.push_back(arithmetic::Operand::varOf(connect.map(impl.mod->chans[funcOuts[0]].data)));
+				} else {
+					op.func = arithmetic::Operation::ARRAY;
+					op.operands.clear();
+					for (size_t out : funcOuts) {
+						op.operands.push_back(expr.pushExpr(arithmetic::Operation(
+							arithmetic::Operation::STRUCT, {
+								arithmetic::Operand::labelOf("Bundle"),
+								(impl.mod->chans[out].hasValid() ?
+									arithmetic::Operand::varOf(connect.map(impl.mod->chans[out].valid)) :
+									arithmetic::Operand::vdd()),
+								arithmetic::Operand::varOf(connect.map(impl.mod->chans[out].data))
+							})));
+					}
+				}
+
 				modified = true;
 			}
 		} else if (op.func == arithmetic::Operation::VALIDITY) {
@@ -283,8 +428,7 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, Linker *linker, bool 
 	static const arithmetic::RuleSet defaultRules = arithmetic::rewriteCanonical() + arithmetic::rewriteSimple();
 	static const arithmetic::RuleSet rewriteRules = defaultRules + buildRules();
 
-	clocked::Module mod;
-	mod.name = func.name;
+	clocked::Module mod(func.name);
 
 	mod.clk = mod.pushNet("clk", clocked::Type(clocked::Type::TypeName::BITS, 1), clocked::Net::Purpose::IN);
 	mod.reset = mod.pushNet("reset", clocked::Type(clocked::Type::TypeName::BITS, 1), clocked::Net::Purpose::IN);
@@ -296,7 +440,7 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, Linker *linker, bool 
 
 	std::vector<size_t> nets;
 	std::vector<Expression> structs;
-	Expression constStruct = arithmetic::construct("ValData", {
+	Expression constStruct = arithmetic::construct("Bundle", {
 		Expression::vdd(),
 		Expression::U(),
 	});
@@ -306,7 +450,7 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, Linker *linker, bool 
 		// Map flow::Func nets to clocked::Channel nets
 		nets.push_back(netIdx);
 		structs.push_back(
-			arithmetic::construct("ValData", {
+			arithmetic::construct("Bundle", {
 				(mod.chans.back().hasValid() ?
 					Expression::varOf(mod.chans.back().valid) :
 					Expression::vdd()),
@@ -364,18 +508,18 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, Linker *linker, bool 
 			cout << "out to: " << request.to_string(true) << endl;
 			// TODO(edward.bingham) unwrap the structure, select the data
 			branch.sub.push_back(
-				clocked::Statement(mod.chans[output.first].data, request));
+				clocked::Statement(mod.chans[output.first].dataReg, request));
 
 			// only when all output channels are ready to be written to
 			// flow::Net::REG don't have valid/ready signals over channel
 			if (mod.chans[output.first].hasValid()) {
 				branch.sub.push_back(clocked::Statement(
-					mod.chans[output.first].valid, Expression::vdd()));
+					mod.chans[output.first].validReg, Expression::vdd()));
 
 				// flow::Net::REG don't have valid/ready signals over channel
 				if (mod.chans[output.first].hasReady()) {
 					branch.expr = branch.expr
-						&& (!mod.chans[output.first].getValid() || mod.chans[output.first].getReady());
+						&& (!mod.chans[output.first].getValidReg() || mod.chans[output.first].getReady());
 				}
 			}
 			// ...either they're open (!valid) or _will be_ open next cycle (ready)

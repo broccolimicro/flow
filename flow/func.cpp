@@ -200,17 +200,6 @@ void Condition::ack(vector<Operand> in) {
 	}
 }
 
-Input::Input() {
-	this->uid = -1;
-}
-
-Input::Input(int uid) {
-	this->uid = uid;
-}
-
-Input::~Input() {
-}
-
 Instance::Instance() {
 }
 

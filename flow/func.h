@@ -85,18 +85,6 @@ struct Condition {
 bool operator==(const Condition &c1, const Condition &c2);
 bool operator!=(const Condition &c1, const Condition &c2);
 
-struct Input {
-	Input();
-	Input(int uid);
-	~Input();
-
-	// index into nets
-	int uid;
-
-	// Which conditions to acknowledge on
-	vector<int> ack;
-};
-
 struct Instance {
 	string type;
 	string name;
