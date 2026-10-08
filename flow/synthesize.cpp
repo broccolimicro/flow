@@ -119,6 +119,8 @@ arithmetic::RuleSet buildRules() {
 	Expression b = Expression::varOf(1);
 	Expression c = Expression::varOf(2);
 	Expression d = Expression::varOf(3);
+	Expression e = Expression::varOf(4);
+	Expression f = Expression::varOf(5);
 	Expression U = Expression::U();
 
 	// All of the simplification rules for Val-Data
@@ -126,6 +128,10 @@ arithmetic::RuleSet buildRules() {
 		memberCall(construct("Bundle", {a, b}), "probe", {}) > construct("Bundle", {a, b}), 
 		member(construct("Bundle", {a, b}), "valid") > a,
 		member(construct("Bundle", {a, b}), "data") > b,
+
+		(construct("Bundle", {a, b})(construct("Bundle", {c, d}))) > (construct("Bundle", {a&c, b(d)})),
+		(construct("Bundle", {a, b})(construct("Bundle", {c, d}), construct("Bundle", {e, f}))) > (construct("Bundle", {a&c&e, b(d, f)})),
+
 		(isValid(construct("Bundle", {a, b}))) > a,
 		(~construct("Bundle", {a, b})) > (~a),
 		(construct("Bundle", {a, b}) & construct("Bundle", {c, d})) > (a&c),
