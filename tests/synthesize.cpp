@@ -959,7 +959,7 @@ module instance_test (
 			end
 		end
 	end
-	add adder(A_valid, A_data, B_valid, B_data, Ci_valid, Ci_data, s_valid, s_data, co_valid, co_data);
+	adder myAdder(A_valid, A_data, B_valid, B_data, Ci_valid, Ci_data, 1, s_data, 1, co_data);
 	myFunc inst0(1, s_data, net0, net1);
 endmodule)""";
 
@@ -974,8 +974,8 @@ endmodule)""";
 	Expression co = func.pushNet("co", Type(Type::TypeName::FIXED, 1), flow::Net::WIRE);
 	
 
-	func.inst.push_back(flow::Instance("add", {A, B, Ci, s, co}));
-	func.inst.back().name = "adder";
+	func.inst.push_back(flow::Instance("adder", {A, B, Ci, s, co}));
+	func.inst.back().name = "myAdder";
 	func.inst.back().comment = "this is an adder";
 
 	size_t branch0 = func.pushCond(Expression::boolOf(true));
@@ -997,11 +997,43 @@ endmodule)""";
 	myFuncMod.chans.back().valid = myFuncMod.pushNet("out_valid", clocked::Type(clocked::Type::BITS, 1), clocked::Net::OUT, myFuncMod.chans.size()-1);
 	myFuncMod.chans.back().data = myFuncMod.pushNet("out_data", clocked::Type(clocked::Type::FIXED, 1), clocked::Net::OUT, myFuncMod.chans.size()-1);
 
+	Func adderFlow;
+	adderFlow.name = "adder";
+	adderFlow.pushNet("A", Type(Type::TypeName::FIXED, 1), flow::Net::IN);
+	adderFlow.pushNet("B", Type(Type::TypeName::FIXED, 1), flow::Net::IN);
+	adderFlow.pushNet("Ci", Type(Type::TypeName::FIXED, 1), flow::Net::IN);
+	adderFlow.pushNet("S", Type(Type::TypeName::FIXED, 1), flow::Net::OUT);
+	adderFlow.pushNet("Co", Type(Type::TypeName::FIXED, 1), flow::Net::OUT);
+
+	clocked::Module adderMod("adder");
+	adderMod.chans.push_back(clocked::Channel("A", clocked::Channel::IN));
+	adderMod.chans.back().valid = adderMod.pushNet("A_valid", clocked::Type(clocked::Type::BITS, 1), clocked::Net::IN, adderMod.chans.size()-1);
+	adderMod.chans.back().data = adderMod.pushNet("A_data", clocked::Type(clocked::Type::FIXED, 1), clocked::Net::IN, adderMod.chans.size()-1);
+
+	adderMod.chans.push_back(clocked::Channel("B", clocked::Channel::IN));
+	adderMod.chans.back().valid = adderMod.pushNet("B_valid", clocked::Type(clocked::Type::BITS, 1), clocked::Net::IN, adderMod.chans.size()-1);
+	adderMod.chans.back().data = adderMod.pushNet("B_data", clocked::Type(clocked::Type::FIXED, 1), clocked::Net::IN, adderMod.chans.size()-1);
+
+	adderMod.chans.push_back(clocked::Channel("Ci", clocked::Channel::IN));
+	adderMod.chans.back().valid = adderMod.pushNet("Ci_valid", clocked::Type(clocked::Type::BITS, 1), clocked::Net::IN, adderMod.chans.size()-1);
+	adderMod.chans.back().data = adderMod.pushNet("Ci_data", clocked::Type(clocked::Type::FIXED, 1), clocked::Net::IN, adderMod.chans.size()-1);
+
+	adderMod.chans.push_back(clocked::Channel("S", clocked::Channel::OUT));
+	adderMod.chans.back().valid = adderMod.pushNet("S_valid", clocked::Type(clocked::Type::BITS, 1), clocked::Net::OUT, adderMod.chans.size()-1);
+	adderMod.chans.back().data = adderMod.pushNet("S_data", clocked::Type(clocked::Type::FIXED, 1), clocked::Net::OUT, adderMod.chans.size()-1);
+
+	adderMod.chans.push_back(clocked::Channel("Co", clocked::Channel::OUT));
+	adderMod.chans.back().valid = adderMod.pushNet("Co_valid", clocked::Type(clocked::Type::BITS, 1), clocked::Net::OUT, adderMod.chans.size()-1);
+	adderMod.chans.back().data = adderMod.pushNet("Co_data", clocked::Type(clocked::Type::FIXED, 1), clocked::Net::OUT, adderMod.chans.size()-1);
+
+
 	FuncSet lib;
 	ModSet rtl;
 	lib.funcs.push_back(myFuncFlow);
+	lib.funcs.push_back(adderFlow);
 	lib.funcs.push_back(func);
 	rtl.mods.push_back(myFuncMod);
+	rtl.mods.push_back(adderMod);
 	TestLinker linker(lib, rtl);
 	clocked::Module mod = synthesizeModuleFromFunc(func, &linker);
 

@@ -460,17 +460,69 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, Linker *linker, bool 
 	}
 
 	for (const auto &inst : func.inst) {
-		vector<Expression> ports;
-		for (const auto &port : inst.ports) {
-			Expression portExpr(port);
-			portExpr.substituteConst(constStruct);
-			portExpr.substitute(nets, structs);
-			portExpr = member(portExpr, "data");
-
-			portExpr.minimize(rewriteRules, typeMinimizer);
-			ports.push_back(portExpr);
+		Implementation impl = linker->find(inst);
+		if (impl.mod == nullptr or impl.func == nullptr) {
+			error("", "unable to link flow to verilog for \'" + inst.type + "\'", __FILE__, __LINE__);
+			continue;
 		}
-		mod.inst.push_back(clocked::Instance(inst.type, ports));
+
+		std::vector<Expression> clockedPorts;
+		for (size_t i = 0; i < impl.mod->nets.size(); i++) {
+			bool isInput = impl.mod->nets[i].purpose == clocked::Net::IN;
+			bool isOutput = impl.mod->nets[i].purpose == clocked::Net::OUT;
+
+			if (isInput or isOutput) {
+				int clockedChan = impl.mod->nets[i].chan;
+				std::string netName = impl.mod->nets[i].name;
+				if (clockedChan >= 0) {
+					netName = impl.mod->chans[clockedChan].name;
+				}
+
+				int flowNet = -1;
+				int flowPort = -1;
+				for (size_t j = 0; j < impl.func->nets.size(); j++) {
+					if (impl.func->nets[j].purpose == flow::Net::IN or
+						impl.func->nets[j].purpose == flow::Net::OUT) {
+						flowPort++;
+					}
+					if (impl.func->nets[j].name == netName) {
+						flowNet = j;
+						break;
+					}
+				}
+
+				if (flowNet < 0) {
+					error("", "unable to link port in verilog instantiation of flow function \'" + netName + "\'", __FILE__, __LINE__);
+					clockedPorts.push_back(Expression::undef());
+					continue;
+				}
+
+				Expression flowOp = Expression::undef();
+				if (flowPort >= 0 and flowPort < inst.ports.size()) {
+					flowOp = inst.ports[flowPort];
+				}
+				flowOp.substituteConst(constStruct);
+				flowOp.substitute(nets, structs);
+				if (clockedChan < 0) {
+					clockedPorts.push_back(flowOp);
+				} else if (i == impl.mod->chans[clockedChan].valid) {
+					clockedPorts.push_back(arithmetic::member(flowOp, "valid"));
+				} else if (i == impl.mod->chans[clockedChan].ready) {
+					clockedPorts.push_back(arithmetic::member(flowOp, "ready"));
+				} else if (i == impl.mod->chans[clockedChan].data) {
+					clockedPorts.push_back(arithmetic::member(flowOp, "data"));
+				} else {
+					internal("", "improperly linked net \'" + netName + "\' in clocked module", __FILE__, __LINE__);
+					clockedPorts.push_back(flowOp);
+				}
+
+				//cout << "before port " << clockedPorts.size()-1 << " " << clockedPorts.back().to_string(true, *mod) << endl;
+				clockedPorts.back().minimize(rewriteRules);
+				//cout << "after port " << clockedPorts.size()-1 << " " << clockedPorts.back().to_string(true, *mod) << endl;
+			}
+		}
+
+		mod.inst.push_back(clocked::Instance(inst.type, clockedPorts));
 		mod.inst.back().name = inst.name;
 		mod.inst.back().comment = inst.comment;
 	}
