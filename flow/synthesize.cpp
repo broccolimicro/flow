@@ -97,6 +97,7 @@ void synthesizeChannel(clocked::Module &mod, const Net &net, clocked::Statement 
 		resetBlock.sub.push_back(clocked::Statement(channel.dataReg, Expression::intOf(0)));
 	} else if (net.purpose == flow::Net::WIRE) {
 		channel.purpose = clocked::Channel::WIRE;
+		channel.valid = mod.pushNet(net.name+"_valid", wireType, clocked::Net::Purpose::WIRE, uid);
 		channel.data  = mod.pushNet(net.name+"_data", synthesizeChannelType(net.type), clocked::Net::Purpose::WIRE, uid);
 
 		// TODO(steven.kneiser) these could be wires for debug or mere modelling in cocotb harness
@@ -144,7 +145,7 @@ arithmetic::RuleSet buildRules() {
 		(isTrue(construct("Bundle", {a, b}))) > (a&&b),
 		(!construct("Bundle", {a, b})) > construct("Bundle", {a, !b}),
 		(construct("Bundle", {a, b}) && construct("Bundle", {c, d})) > construct("Bundle", {a&c, b&&d}),
-		(construct("Bundle", {a, b}) || construct("Bundle", {c, d})) > construct("Bundle", {(a&&b)|(c&&d)|(a&c), (a&&b)||(c&&d)}),
+		(construct("Bundle", {a, b}) || construct("Bundle", {c, d})) > construct("Bundle", {a&c, b||d}),
 		(booleanXor(construct("Bundle", {a, b}), construct("Bundle", {c, d}))) > construct("Bundle", {a&c, booleanXor(b, d)}),
 
 		(construct("Bundle", {a, b}) + construct("Bundle", {c, d})) > construct("Bundle", {a&c, b+d}),
@@ -204,8 +205,6 @@ Mapping<arithmetic::Operand> minimizeTypes(clocked::Module *mod, Linker *linker,
 
 	static const arithmetic::RuleSet defaultRules = arithmetic::rewriteCanonical() + arithmetic::rewriteSimple();
 	static const arithmetic::RuleSet rewriteRules = defaultRules + buildRules();
-	auto typeMinimizer = std::bind(minimizeTypes, &mod, linker, std::placeholders::_1, std::placeholders::_2);
-
 
 	for (const auto &idx : expr.exprIndex()) {
 		arithmetic::Operation op = *expr.getExpr(idx.index);
@@ -239,7 +238,7 @@ Mapping<arithmetic::Operand> minimizeTypes(clocked::Module *mod, Linker *linker,
 
 				Mapping<size_t> connect;
 				std::vector<Expression> clockedPorts;
-				for (size_t i = 0; i < impl.mod->nets.size(); i++) {
+				for (int i = 0; i < (int)impl.mod->nets.size(); i++) {
 					bool isInput = impl.mod->nets[i].purpose == clocked::Net::IN;
 					bool isOutput = impl.mod->nets[i].purpose == clocked::Net::OUT;
 
@@ -270,7 +269,7 @@ Mapping<arithmetic::Operand> minimizeTypes(clocked::Module *mod, Linker *linker,
 						}
 
 						Expression flowOp = Expression::undef();
-						if (flowPort >= 0 and flowPort < flowPorts.size()) {
+						if (flowPort >= 0 and flowPort < (int)flowPorts.size()) {
 							flowOp = flowPorts[flowPort];
 						}
 						if (isOutput) {
@@ -364,6 +363,12 @@ Mapping<arithmetic::Operand> minimizeTypes(clocked::Module *mod, Linker *linker,
 					op.operands.push_back(Operand::vdd());
 					modified = true;
 				}
+			} else if (op.operands[0].isConst()) {
+				op.func = arithmetic::Operation::IDENTITY;
+				arithmetic::Value value = op.operands[0].cnst;
+				op.operands.clear();
+				op.operands.push_back(isValid(value));
+				modified = true;
 			}
 		} else if (op.func == arithmetic::Operation::TRUTHINESS) {
 			if (op.operands.empty()) {
@@ -379,10 +384,20 @@ Mapping<arithmetic::Operand> minimizeTypes(clocked::Module *mod, Linker *linker,
 					modified = true;
 				} else {
 					op.func = arithmetic::Operation::NOT_EQUAL;
-					op.operands.push_back(Operand::intOf(0));
+					op.operands.push_back(Operand::structOf("Bundle", {Value::vdd(), Value::intOf(0)}));
 					modified = true;
 				}
-			}
+			} else if (op.operands[0].isConst()) {
+				op.func = arithmetic::Operation::IDENTITY;
+				arithmetic::Value value = op.operands[0].cnst;
+				op.operands.clear();
+				op.operands.push_back(isTrue(value));
+				modified = true;
+			}/* else {
+				op.func = arithmetic::Operation::NOT_EQUAL;
+				op.operands.push_back(Operand::structOf("Bundle", {Value::vdd(), Value::intOf(0)}));
+				modified = true;
+			}*/
 		} else if (op.func == arithmetic::Operation::CAST) {
 			if (op.operands.size() < 2u
 				or not op.operands[0].isConst()
@@ -415,7 +430,7 @@ Mapping<arithmetic::Operand> minimizeTypes(clocked::Module *mod, Linker *linker,
 					} else {
 						op.func = arithmetic::Operation::NOT_EQUAL;
 						op.operands.erase(op.operands.begin());
-						op.operands.push_back(Operand::intOf(0));
+						op.operands.push_back(Operand::structOf("Bundle", {Value::vdd(), Value::intOf(0)}));
 						modified = true;
 					}
 				}
@@ -473,7 +488,7 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, Linker *linker, bool 
 		}
 
 		std::vector<Expression> clockedPorts;
-		for (size_t i = 0; i < impl.mod->nets.size(); i++) {
+		for (int i = 0; i < (int)impl.mod->nets.size(); i++) {
 			bool isInput = impl.mod->nets[i].purpose == clocked::Net::IN;
 			bool isOutput = impl.mod->nets[i].purpose == clocked::Net::OUT;
 
@@ -504,7 +519,7 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, Linker *linker, bool 
 				}
 
 				Expression flowOp = Expression::undef();
-				if (flowPort >= 0 and flowPort < inst.ports.size()) {
+				if (flowPort >= 0 and flowPort < (int)inst.ports.size()) {
 					flowOp = inst.ports[flowPort];
 				}
 				flowOp.substituteConst(constStruct);
@@ -536,6 +551,12 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, Linker *linker, bool 
 	for (const auto &cond : func.conds) {
 		clocked::Statement branch(true);
 
+		Expression branch_valid(arithmetic::isTrue(cond.valid));
+		branch_valid.substituteConst(constStruct);
+		branch_valid.substitute(nets, structs);
+
+		branch_valid.minimize(rewriteRules, typeMinimizer);
+
 		for (const auto &reg : cond.regs) {
 			Expression regExpr(reg.second);
 			regExpr.substituteConst(constStruct);
@@ -556,17 +577,18 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, Linker *linker, bool 
 
 			// Assign to outputs
 			Expression request(output.second);
-			cout << "out from: " << request.to_string(true) << endl;
 			request.substituteConst(constStruct);
 			request.substitute(nets, structs);
-			request = member(request, "data");
-			cout << "out from: " << request.to_string(true) << endl;
-
 			request.minimize(rewriteRules, typeMinimizer);
-			cout << "out to: " << request.to_string(true) << endl;
+			Expression requestData = member(request, "data");
+			requestData.minimize(rewriteRules);
 			// TODO(edward.bingham) unwrap the structure, select the data
 			branch.sub.push_back(
-				clocked::Statement(mod.chans[output.first].dataReg, request));
+				clocked::Statement(mod.chans[output.first].dataReg, requestData));
+
+			Expression requestValid = member(request, "valid");
+			branch_valid = requestValid & branch_valid;
+			branch_valid.minimize(rewriteRules, typeMinimizer);
 
 			// only when all output channels are ready to be written to
 			// flow::Net::REG don't have valid/ready signals over channel
@@ -589,12 +611,6 @@ clocked::Module synthesizeModuleFromFunc(const Func &func, Linker *linker, bool 
 				resetValidReg(branch, mod.chans[chanIdx]);
 			}
 		}
-
-		Expression branch_valid(arithmetic::isTrue(cond.valid));
-		branch_valid.substituteConst(constStruct);
-		branch_valid.substitute(nets, structs);
-
-		branch_valid.minimize(rewriteRules, typeMinimizer);
 
 		branch.expr = mod.chans[cond.uid].getValid() && branch.expr;
 		branch.expr.minimize(defaultRules, typeMinimizer);

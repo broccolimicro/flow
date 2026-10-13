@@ -1,6 +1,6 @@
 NAME          = flow
 DEPEND        = verilog arithmetic common
-TEST_DEPEND   = interpret_verilog interpret_flow interpret_arithmetic verilog arithmetic parse_dot parse_expression parse_ucs parse_verilog parse common
+TEST_DEPEND   = interpret_verilog interpret_flow interpret_arithmetic verilog arithmetic parse_cog parse_dot parse_expression parse_ucs parse_verilog parse common
 
 COVERAGE ?= 0
 

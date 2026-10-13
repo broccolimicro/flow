@@ -10,6 +10,7 @@
 #include <verilog/module.h>
 #include <flow/synthesize.h>
 #include <interpret_flow/export_dot.h>
+#include <interpret_flow/export_cog.h>
 #include <interpret_verilog/export_verilog.h>
 
 namespace fs = std::filesystem;
@@ -103,7 +104,7 @@ module source (
 	wire branch_0_ready;
 	assign R_valid = R_valid_reg;
 	assign R_data = R_data_reg;
-	assign branch_0_valid = 1'b1;
+	assign branch_0_valid = 1;
 	assign branch_0_ready = branch_0_valid&&(R_ready||!R_valid_reg);
 	always @(posedge clk) begin
 		if (reset) begin
@@ -188,7 +189,7 @@ module buffer (
 	wire branch_0_ready;
 	assign R_valid = R_valid_reg;
 	assign R_data = R_data_reg;
-	assign branch_0_valid = 1'b1;
+	assign branch_0_valid = L_valid;
 	assign branch_0_ready = branch_0_valid&&(R_ready||!R_valid_reg);
 	assign L_ready = branch_0_ready;
 	always @(posedge clk) begin
@@ -251,7 +252,7 @@ module copy (
 	assign R0_data = R0_data_reg;
 	assign R1_valid = R1_valid_reg;
 	assign R1_data = R1_data_reg;
-	assign branch_0_valid = 1'b1;
+	assign branch_0_valid = L_valid;
 	assign branch_0_ready = branch_0_valid&&(R0_ready||!R0_valid_reg)&&(R1_ready||!R1_valid_reg);
 	assign L_ready = branch_0_ready;
 	always @(posedge clk) begin
@@ -319,7 +320,7 @@ module func (
 	wire branch_0_ready;
 	assign R_valid = R_valid_reg;
 	assign R_data = R_data_reg;
-	assign branch_0_valid = 1'b1;
+	assign branch_0_valid = L0_valid&L1_valid;
 	assign branch_0_ready = branch_0_valid&&(R_ready||!R_valid_reg);
 	assign L0_ready = branch_0_ready;
 	assign L1_ready = branch_0_ready;
@@ -328,7 +329,7 @@ module func (
 			R_valid_reg <= 0;
 			R_data_reg <= 0;
 		end else if (branch_0_valid&&(R_ready||!R_valid_reg)) begin
-			R_data_reg <= L0_valid&&L0_data||L1_valid&&L1_data;
+			R_data_reg <= L0_data||L1_data;
 			R_valid_reg <= 1;
 		end else begin
 			if (R_ready) begin
@@ -392,9 +393,9 @@ module split (
 	assign R0_data = R0_data_reg;
 	assign R1_valid = R1_valid_reg;
 	assign R1_data = R1_data_reg;
-	assign branch_0_valid = C_valid&&C_data==0;
+	assign branch_0_valid = L_valid&(C_valid&&C_data==0);
 	assign branch_0_ready = branch_0_valid&&(R0_ready||!R0_valid_reg);
-	assign branch_1_valid = C_valid&&C_data==1;
+	assign branch_1_valid = L_valid&(C_valid&&C_data==1);
 	assign branch_1_ready = branch_1_valid&&(R1_ready||!R1_valid_reg);
 	assign L_ready = branch_0_ready||branch_1_ready;
 	assign C_ready = branch_0_ready||branch_1_ready;
@@ -478,9 +479,9 @@ module merge (
 	wire branch_1_ready;
 	assign R_valid = R_valid_reg;
 	assign R_data = R_data_reg;
-	assign branch_0_valid = C_valid&&C_data==0;
+	assign branch_0_valid = L0_valid&(C_valid&&C_data==0);
 	assign branch_0_ready = branch_0_valid&&(R_ready||!R_valid_reg);
-	assign branch_1_valid = C_valid&&C_data==1;
+	assign branch_1_valid = L1_valid&(C_valid&&C_data==1);
 	assign branch_1_ready = branch_1_valid&&(R_ready||!R_valid_reg);
 	assign L0_ready = branch_0_ready;
 	assign L1_ready = branch_1_ready;
@@ -550,7 +551,7 @@ module s_adder (
 	wire branch_0_ready;
 	assign R_valid = R_valid_reg;
 	assign R_data = R_data_reg;
-	assign branch_0_valid = 1'b1;
+	assign branch_0_valid = L_valid;
 	assign branch_0_ready = branch_0_valid&&(R_ready||!R_valid_reg);
 	assign L_ready = branch_0_ready;
 	always @(posedge clk) begin
@@ -636,15 +637,15 @@ module serial_adder (
 	assign Sd_data = Sd_data_reg;
 	assign Sc_valid = Sc_valid_reg;
 	assign Sc_data = Sc_data_reg;
-	assign branch_0_valid = (Ac_valid&&!Ac_data)&(Bc_valid&&!Bc_data);
+	assign branch_0_valid = Ad_valid&Bd_valid&(Ac_valid&&!Ac_data)&(Bc_valid&&!Bc_data);
 	assign branch_0_ready = branch_0_valid&&(Sd_ready||!Sd_valid_reg)&&(Sc_ready||!Sc_valid_reg);
-	assign branch_1_valid = (Ac_valid&&Ac_data)&(Bc_valid&&!Bc_data);
+	assign branch_1_valid = Ad_valid&Bd_valid&(Ac_valid&&Ac_data)&(Bc_valid&&!Bc_data);
 	assign branch_1_ready = branch_1_valid&&(Sd_ready||!Sd_valid_reg)&&(Sc_ready||!Sc_valid_reg);
-	assign branch_2_valid = (Ac_valid&&!Ac_data)&(Bc_valid&&Bc_data);
+	assign branch_2_valid = Ad_valid&Bd_valid&(Ac_valid&&!Ac_data)&(Bc_valid&&Bc_data);
 	assign branch_2_ready = branch_2_valid&&(Sd_ready||!Sd_valid_reg)&&(Sc_ready||!Sc_valid_reg);
-	assign branch_3_valid = (Ac_valid&&Ac_data)&(Bc_valid&&Bc_data)&(Ad_valid&Bd_valid&&(Ad_data+Bd_data+ci_data)/16!=ci_data);
+	assign branch_3_valid = Ad_valid&Bd_valid&(Ac_valid&&Ac_data)&(Bc_valid&&Bc_data)&(Ad_valid&Bd_valid&&(Ad_data+Bd_data+ci_data)[4]!=ci_data);
 	assign branch_3_ready = branch_3_valid&&(Sd_ready||!Sd_valid_reg)&&(Sc_ready||!Sc_valid_reg);
-	assign branch_4_valid = (Ac_valid&&Ac_data)&(Bc_valid&&Bc_data)&(Ad_valid&Bd_valid&&(Ad_data+Bd_data+ci_data)/16==ci_data);
+	assign branch_4_valid = Ad_valid&Bd_valid&(Ac_valid&&Ac_data)&(Bc_valid&&Bc_data)&(Ad_valid&Bd_valid&&(Ad_data+Bd_data+ci_data)[4]==ci_data);
 	assign branch_4_ready = branch_4_valid&&(Sd_ready||!Sd_valid_reg)&&(Sc_ready||!Sc_valid_reg);
 	assign Ad_ready = branch_0_ready||branch_2_ready||branch_4_ready;
 	assign Ac_ready = branch_0_ready||branch_2_ready||branch_4_ready;
@@ -658,32 +659,32 @@ module serial_adder (
 			Sc_data_reg <= 0;
 			ci_data <= 0;
 		end else if (branch_0_valid&&(Sd_ready||!Sd_valid_reg)&&(Sc_ready||!Sc_valid_reg)) begin
-			ci_data <= (Ad_data+Bd_data+ci_data)/16;
-			Sd_data_reg <= (Ad_data+Bd_data+ci_data)%16;
+			ci_data <= (Ad_data+Bd_data+ci_data)[4];
+			Sd_data_reg <= (Ad_data+Bd_data+ci_data)[0:4];
 			Sd_valid_reg <= 1;
 			Sc_data_reg <= 1'b0;
 			Sc_valid_reg <= 1;
 		end else if (branch_1_valid&&(Sd_ready||!Sd_valid_reg)&&(Sc_ready||!Sc_valid_reg)) begin
-			ci_data <= (Ad_data+Bd_data+ci_data)/16;
-			Sd_data_reg <= (Ad_data+Bd_data+ci_data)%16;
+			ci_data <= (Ad_data+Bd_data+ci_data)[4];
+			Sd_data_reg <= (Ad_data+Bd_data+ci_data)[0:4];
 			Sd_valid_reg <= 1;
 			Sc_data_reg <= 1'b0;
 			Sc_valid_reg <= 1;
 		end else if (branch_2_valid&&(Sd_ready||!Sd_valid_reg)&&(Sc_ready||!Sc_valid_reg)) begin
-			ci_data <= (Ad_data+Bd_data+ci_data)/16;
-			Sd_data_reg <= (Ad_data+Bd_data+ci_data)%16;
+			ci_data <= (Ad_data+Bd_data+ci_data)[4];
+			Sd_data_reg <= (Ad_data+Bd_data+ci_data)[0:4];
 			Sd_valid_reg <= 1;
 			Sc_data_reg <= 1'b0;
 			Sc_valid_reg <= 1;
 		end else if (branch_3_valid&&(Sd_ready||!Sd_valid_reg)&&(Sc_ready||!Sc_valid_reg)) begin
-			ci_data <= (Ad_data+Bd_data+ci_data)/16;
-			Sd_data_reg <= (Ad_data+Bd_data+ci_data)%16;
+			ci_data <= (Ad_data+Bd_data+ci_data)[4];
+			Sd_data_reg <= (Ad_data+Bd_data+ci_data)[0:4];
 			Sd_valid_reg <= 1;
 			Sc_data_reg <= 1'b0;
 			Sc_valid_reg <= 1;
 		end else if (branch_4_valid&&(Sd_ready||!Sd_valid_reg)&&(Sc_ready||!Sc_valid_reg)) begin
 			ci_data <= 0;
-			Sd_data_reg <= (Ad_data+Bd_data+ci_data)%16;
+			Sd_data_reg <= (Ad_data+Bd_data+ci_data)[0:4];
 			Sd_valid_reg <= 1;
 			Sc_data_reg <= 1'b1;
 			Sc_valid_reg <= 1;
@@ -713,8 +714,8 @@ endmodule)""";
 	Expression expr_Bd(Bd);
 	Expression expr_ci(ci);
 
-	Expression expr_s((expr_Ad + expr_Bd + expr_ci) % pow(2, WIDTH));
-	Expression expr_co((expr_Ad + expr_Bd + expr_ci) / pow(2, WIDTH));
+	Expression expr_s((expr_Ad + expr_Bd + expr_ci)(0, (int)WIDTH));
+	Expression expr_co((expr_Ad + expr_Bd + expr_ci)((int)WIDTH));
 
 	size_t branch0 = func.pushCond(!expr_Ac && !expr_Bc);
 	func.conds[branch0].req(Sd, expr_s);
@@ -849,7 +850,7 @@ module full_adder (
 	assign S_data = S_data_reg;
 	assign Co_valid = Co_valid_reg;
 	assign Co_data = Co_data_reg;
-	assign branch_0_valid = 1'b1;
+	assign branch_0_valid = A_valid&B_valid&Ci_valid;
 	assign branch_0_ready = branch_0_valid&&(S_ready||!S_valid_reg)&&(Co_ready||!Co_valid_reg);
 	assign A_ready = branch_0_ready;
 	assign B_ready = branch_0_ready;
@@ -863,7 +864,7 @@ module full_adder (
 		end else if (branch_0_valid&&(S_ready||!S_valid_reg)&&(Co_ready||!Co_valid_reg)) begin
 			S_data_reg <= (A_data&&!B_data||!A_data&&B_data)&&!Ci_data||!(A_data&&!B_data||!A_data&&B_data)&&Ci_data;
 			S_valid_reg <= 1;
-			Co_data_reg <= A_data&&B_data&&A_valid&B_valid||(A_data&&Ci_data&&A_valid&Ci_valid)|(B_data&&Ci_data&&B_valid&Ci_valid)|A_valid&B_valid&Ci_valid&&(A_data&&Ci_data&&A_valid&Ci_valid||B_data&&Ci_data&&B_valid&Ci_valid);
+			Co_data_reg <= A_data&&B_data||A_data&&Ci_data||B_data&&Ci_data;
 			Co_valid_reg <= 1;
 		end else begin
 			if (S_ready) begin
@@ -924,7 +925,9 @@ module instance_test (
 	reg S_data_reg;
 	reg Co_valid_reg;
 	reg Co_data_reg;
+	wire s_valid;
 	wire s_data;
+	wire co_valid;
 	wire co_data;
 	wire branch_0_valid;
 	wire branch_0_ready;
@@ -934,7 +937,7 @@ module instance_test (
 	assign S_data = S_data_reg;
 	assign Co_valid = Co_valid_reg;
 	assign Co_data = Co_data_reg;
-	assign branch_0_valid = 1'b1;
+	assign branch_0_valid = co_valid&net0;
 	assign branch_0_ready = branch_0_valid&&(S_ready||!S_valid_reg)&&(Co_ready||!Co_valid_reg);
 	assign A_ready = branch_0_ready;
 	assign B_ready = branch_0_ready;
@@ -959,8 +962,8 @@ module instance_test (
 			end
 		end
 	end
-	adder myAdder(A_valid, A_data, B_valid, B_data, Ci_valid, Ci_data, 1, s_data, 1, co_data);
-	myFunc inst0(1, s_data, net0, net1);
+	adder myAdder(A_valid, A_data, B_valid, B_data, Ci_valid, Ci_data, s_valid, s_data, co_valid, co_data);
+	myFunc inst0(s_valid, s_data, net0, net1);
 endmodule)""";
 
 	Func func;
@@ -1037,6 +1040,13 @@ endmodule)""";
 	TestLinker linker(lib, rtl);
 	clocked::Module mod = synthesizeModuleFromFunc(func, &linker);
 
+	//cout << "main func (flow)" << endl;
+	//cout << parse_cog::export_func(func).to_string() << endl << endl;
+	
+	//cout << "main func (verilog)" << endl;
+	//cout << parse_verilog::export_module(mod).to_string() << endl << endl;
+
+	//cout << "diff" << endl;
 	expectEq(expected, parse_verilog::export_module(mod).to_string());
 }
 
