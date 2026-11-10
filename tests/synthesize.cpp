@@ -10,7 +10,7 @@
 #include <verilog/module.h>
 #include <flow/synthesize.h>
 #include <interpret_flow/export_dot.h>
-#include <interpret_flow/export_cog.h>
+#include <interpret_chp/export_cog.h>
 #include <interpret_verilog/export_verilog.h>
 
 namespace fs = std::filesystem;
