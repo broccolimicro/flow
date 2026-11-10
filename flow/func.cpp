@@ -211,7 +211,8 @@ Instance::Instance(string type, vector<Expression> ports) {
 Instance::~Instance() {
 }
 
-Func::Func() {
+Func::Func(string name) {
+	this->name = name;
 }
 
 Func::~Func() {

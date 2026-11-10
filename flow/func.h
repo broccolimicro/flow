@@ -98,7 +98,7 @@ struct Instance {
 };
 
 struct Func {
-	Func();
+	Func(string name="");
 	~Func();
 
 	string name;
